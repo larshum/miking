@@ -3,6 +3,7 @@
 include "string.mc"
 include "name.mc"
 include "assoc.mc"
+include "mexpr/info.mc"
 
 -----------
 -- TERMS --
@@ -10,7 +11,10 @@ include "assoc.mc"
 
 lang VarAst
   syn Expr =
-  | TmVar {ident : Name}
+  | TmVar {ident : Name, fi: Info}
+
+  sem info =
+  | TmVar r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmVar t -> TmVar t
@@ -21,21 +25,28 @@ end
 
 lang AppAst
   syn Expr =
-  | TmApp {lhs : Expr,
-           rhs : Expr}
+  | TmApp {lhs : Expr, rhs : Expr, fi: Info}
+
+  sem info =
+  | TmApp r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmApp t -> TmApp {lhs = f t.lhs, rhs = f t.rhs}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
   | TmApp t -> f (f acc t.lhs) t.rhs
+
 end
 
 lang FunAst = VarAst + AppAst
   syn Expr =
   | TmLam {ident : Name,
            tpe   : Option,
-           body  : Expr}
+           body  : Expr,
+           fi    : Info}
+
+  sem info =
+  | TmLam r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmLam t -> TmLam {t with body = f t.body}
@@ -52,12 +63,12 @@ lang RecordAst
                     value : Expr}
 
   sem smap_Expr_Expr (f : Expr -> a) =
-  | TmRecord t -> TmRecord {bindings = assocMap {eq=eqstr} f t.bindings}
+  | TmRecord t -> TmRecord {bindings = assocMap {eq=eqString} f t.bindings}
   | TmRecordUpdate t -> TmRecordUpdate {{t with rec = f t.rec}
                                            with value = f t.value}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmRecord t -> assocFold {eq=eqstr} (lam acc. lam _k. lam v. f acc v) acc t.bindings
+  | TmRecord t -> assocFold {eq=eqString} (lam acc. lam _k. lam v. f acc v) acc t.bindings
   | TmRecordUpdate t -> f (f acc t.rec) t.value
 end
 
@@ -65,7 +76,11 @@ lang LetAst = VarAst
   syn Expr =
   | TmLet {ident  : Name,
            body   : Expr,
-           inexpr : Expr}
+           inexpr : Expr,
+	   fi     : Info}
+
+  sem info =
+  | TmLet r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmLet t -> TmLet {{t with body = f t.body} with inexpr = f t.inexpr}
@@ -94,7 +109,10 @@ lang ConstAst
   syn Const =
 
   syn Expr =
-  | TmConst {val : Const}
+  | TmConst {val : Const, fi: Info}
+
+  sem info =
+  | TmConst r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmConst t -> TmConst t
@@ -125,9 +143,13 @@ lang MatchAst
   | TmMatch {target : Expr,
              pat    : Pat,
              thn    : Expr,
-             els    : Expr}
+             els    : Expr,
+             fi     : Info}
 
   syn Pat =
+
+  sem info =
+  | TmMatch r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmMatch t -> TmMatch {{{t with target = f t.target}
@@ -155,7 +177,10 @@ end
 
 lang SeqAst
   syn Expr =
-  | TmSeq {tms : [Expr]}
+  | TmSeq {tms : [Expr], fi: Info}
+
+  sem info =
+  | TmSeq r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmSeq t -> TmSeq {t with tms = map f t.tms}
@@ -166,9 +191,12 @@ end
 
 lang NeverAst
   syn Expr =
-  | TmNever {}
+  | TmNever {fi: Info}
 
-  -- TODO smap, sfold?
+  sem info =
+  | TmNever r -> r.fi
+
+  -- TODO(dlunde,2020-09-29): smap, sfold
 end
 
 ---------------
@@ -206,7 +234,7 @@ end
 lang BoolAst = ConstAst
   syn Const =
   | CBool {val : Bool}
-  | CNot {}
+  | CNot {} -- TODO(dlunde,2020-09-29): This constant does not exist in boot. Remove?
 end
 
 lang CmpIntAst = IntAst + BoolAst
@@ -233,10 +261,10 @@ end
 
 lang CmpSymbAst = SymbAst + BoolAst
   syn Const =
-  | CEqs {}
+  | CEqsym {}
 end
 
--- TODO Remove constants no longer available in boot?
+-- TODO(dlunde,2020-09-29): Remove constants no longer available in boot?
 lang SeqOpAst = SeqAst
   syn Const =
   | CGet {}
@@ -257,6 +285,7 @@ end
 type PatName
 con PName     : Name -> PatName
 con PWildcard : ()   -> PatName
+
 lang VarPat
   syn Pat =
   | PVar {ident : PatName}
@@ -295,10 +324,10 @@ lang RecordPat
   | PRecord {bindings : AssocMap String Pat}
 
   sem smap_Pat_Pat (f : Pat -> a) =
-  | PRecord b -> PRecord {b with bindings = assocMap {eq=eqstr} (lam b. (b.0, f b.1)) b.bindings}
+  | PRecord b -> PRecord {b with bindings = assocMap {eq=eqString} (lam b. (b.0, f b.1)) b.bindings}
 
   sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PRecord {bindings = bindings} -> assocFold {eq=eqstr} (lam acc. lam _k. lam v. f acc v) acc bindings
+  | PRecord {bindings = bindings} -> assocFold {eq=eqString} (lam acc. lam _k. lam v. f acc v) acc bindings
 end
 
 lang DataPat = DataAst
@@ -337,7 +366,10 @@ end
 
 lang BoolPat = BoolAst
   syn Pat =
-  | PBool {val : Bool}
+  | PBool {val : Bool, fi : Info}
+
+  sem info =
+  | PBool r -> r.fi
 
   sem smap_Pat_Pat (f : Pat -> a) =
   | PBool v -> PBool v
@@ -382,7 +414,7 @@ end
 -----------
 -- TYPES --
 -----------
--- TODO Update (also not up to date in boot?)
+-- TODO(dlunde,2020-09-29): Update (also not up to date in boot?)
 
 lang FunTypeAst
   syn Type =

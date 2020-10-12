@@ -79,10 +79,10 @@ lang RecordANF = ANF + RecordAst
       (lam acc. lam k. lam e.
          (lam bs.
             normalizeName
-              (lam v. acc (assocInsert {eq=eqstr} k v bs))
+              (lam v. acc (assocInsert {eq=eqString} k v bs))
               e))
     in
-    (assocFold {eq=eqstr} f acc bindings) assocEmpty
+    (assocFold {eq=eqString} f acc bindings) assocEmpty
 
   | TmRecordUpdate {rec = rec, key = key, value = value} ->
     normalizeName
@@ -268,7 +268,7 @@ let debug = false in
 let debugPrint = lam t.
   if debug then
     let _ = printLn "--- BEFORE ANF ---" in
-    let t = symbolize assocEmpty t in
+    let t = symbolize t in
     let _ = printLn (expr2str t) in
     let _ = print "\n" in
     let _ = printLn "--- AFTER ANF ---" in

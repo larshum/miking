@@ -43,8 +43,9 @@ let builtin =
    ("ltf",f(Cltf(None)));("leqf",f(Cleqf(None)));("gtf",f(Cgtf(None)));("geqf",f(Cgeqf(None)));
    ("eqf",f(Ceqf(None)));("neqf",f(Cneqf(None)));
    ("floorfi", f(Cfloorfi)); ("ceilfi", f(Cceilfi)); ("roundfi", f(Croundfi));
-   ("int2float", f(CInt2float)); ("string2float", f(CString2float));
-   ("char2int",f(CChar2int));("int2char",f(CInt2char));
+   ("int2float", f(Cint2float)); ("string2float", f(Cstring2float));
+   ("eqc",f(Ceqc(None)));
+   ("char2int",f(Cchar2int));("int2char",f(Cint2char));
    ("makeSeq",f(CmakeSeq(None))); ("length",f(Clength));("concat",f(Cconcat(None)));
    ("get",f(Cget(None)));("set",f(Cset(None,None)));
    ("cons",f(Ccons(None)));("snoc",f(Csnoc(None)));
@@ -63,11 +64,11 @@ let builtin =
    ("fileExists", f(CfileExists)); ("deleteFile", f(CdeleteFile));
    ("error",f(Cerror));
    ("exit",f(Cexit));
-   ("eqs", f(Ceqs(None))); ("gensym", f(Cgensym)); ("sym2hash", f(CSym2hash));
+   ("eqsym", f(Ceqsym(None))); ("gensym", f(Cgensym)); ("sym2hash", f(Csym2hash));
    ("randIntU", f(CrandIntU(None))); ("randSetSeed", f(CrandSetSeed));
    ("wallTimeMs",f(CwallTimeMs)); ("sleepMs",f(CsleepMs));
   ]
-  (* Append external functions TODO: Should not be part of core language *)
+  (* Append external functions TODO(?,?): Should not be part of core language *)
   @ Ext.externals
   (* Append sundials intrinsics *)
   @ Sd.externals
@@ -120,12 +121,13 @@ let arity = function
   | Cfloorfi    -> 1
   | Cceilfi     -> 1
   | Croundfi    -> 1
-  | CInt2float  -> 1
-  | CString2float -> 1
+  | Cint2float  -> 1
+  | Cstring2float -> 1
   (* MCore intrinsic: characters *)
   | CChar(_)    -> 0
-  | CChar2int   -> 1
-  | CInt2char   -> 1
+  | Ceqc(_)     -> 2
+  | Cchar2int   -> 1
+  | Cint2char   -> 1
   (* MCore intrinsic: sequences *)
   | CmakeSeq(None)    -> 2 | CmakeSeq(Some(_)) -> 1
   | Clength           -> 1
@@ -153,14 +155,14 @@ let arity = function
   (* MCore symbols *)
   | CSymb(_)      -> 0
   | Cgensym       -> 1
-  | Ceqs(None)    -> 2
-  | Ceqs(Some(_)) -> 1
-  | CSym2hash     -> 1
+  | Ceqsym(None)    -> 2
+  | Ceqsym(Some(_)) -> 1
+  | Csym2hash     -> 1
   (* Python intrinsics *)
   | CPy v   -> Pyffi.arity v
   (* Sundials intrinsics *)
   | CSd v   -> Sd.arity v
-  (* External functions TODO: Should not be part of core language *)
+  (* External functions TODO(?,?): Should not be part of core language *)
   | CExt v  -> Ext.arity v
   (* MCore intrinsic: random numbers *)
   | CrandIntU(None)    -> 2
@@ -321,7 +323,7 @@ let delta eval env fi c v  =
     | Cneqf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cneqf(Some(v)))
     | Cneqf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CBool(v1 <> v2))
     | Cneqf(None),_ | Cneqf(Some(_)),_  -> fail_constapp fi
-    | CString2float,TmSeq(fi,s) ->
+    | Cstring2float,TmSeq(fi,s) ->
         let to_char = function
           | TmConst(_, CChar(c)) -> c
           | _ -> fail_constapp fi
@@ -331,7 +333,7 @@ let delta eval env fi c v  =
                 |> Ustring.from_uchars |> Ustring.to_utf8
         in
         TmConst(fi, CFloat(Float.of_string f))
-    | CString2float,_ -> fail_constapp fi
+    | Cstring2float,_ -> fail_constapp fi
 
     | Cfloorfi,TmConst(fi,CFloat(v)) -> TmConst(fi,CInt(Float.floor v |> int_of_float))
     | Cfloorfi,_ -> fail_constapp fi
@@ -342,17 +344,20 @@ let delta eval env fi c v  =
     | Croundfi,TmConst(fi,CFloat(v)) -> TmConst(fi,CInt(Float.round v |> int_of_float))
     | Croundfi,_ -> fail_constapp fi
 
-    | CInt2float,TmConst(fi,CInt(v)) -> TmConst(fi,CFloat(float_of_int v))
-    | CInt2float,_ -> fail_constapp fi
+    | Cint2float,TmConst(fi,CInt(v)) -> TmConst(fi,CFloat(float_of_int v))
+    | Cint2float,_ -> fail_constapp fi
 
     (* MCore intrinsic: characters *)
     | CChar(_),_ -> fail_constapp fi
 
-    | CChar2int,TmConst(fi,CChar(v)) -> TmConst(fi,CInt(v))
-    | CChar2int,_ -> fail_constapp fi
+    | Ceqc(None),TmConst(fi,CChar(v)) -> TmConst(fi,Ceqc(Some(v)))
+    | Ceqc(Some(v1)),TmConst(fi,CChar(v2)) -> TmConst(fi,CBool(v1 = v2))
+    | Ceqc(None),_ | Ceqc(Some(_)),_  -> fail_constapp fi
+    | Cchar2int,TmConst(fi,CChar(v)) -> TmConst(fi,CInt(v))
+    | Cchar2int,_ -> fail_constapp fi
 
-    | CInt2char,TmConst(fi,CInt(v)) -> TmConst(fi,CChar(v))
-    | CInt2char,_ -> fail_constapp fi
+    | Cint2char,TmConst(fi,CInt(v)) -> TmConst(fi,CChar(v))
+    | Cint2char,_ -> fail_constapp fi
 
     (* MCore intrinsic: sequences *)
     | CmakeSeq(None),TmConst(fi,CInt(v)) -> TmConst(fi,CmakeSeq(Some(v)))
@@ -408,14 +413,14 @@ let delta eval env fi c v  =
        else TmConst(fi, CInt(rand_int_u v1 v2))
     | CrandIntU(_),_ -> fail_constapp fi
 
-    | CrandSetSeed,TmConst(fi,CInt(v)) -> rand_set_seed v; tmUnit
+    | CrandSetSeed,TmConst(_,CInt(v)) -> rand_set_seed v; tmUnit
     | CrandSetSeed,_ -> fail_constapp fi
 
     (* MCore intrinsic: time *)
     | CwallTimeMs, TmRecord(fi,x) when Record.is_empty x -> TmConst(fi, CFloat(get_wall_time_ms ()))
     | CwallTimeMs, _ -> fail_constapp fi
 
-    | CsleepMs, TmConst(fi, CInt(v)) -> sleep_ms v ; tmUnit
+    | CsleepMs, TmConst(_, CInt(v)) -> sleep_ms v ; tmUnit
     | CsleepMs, _ -> fail_constapp fi
 
     (* MCore debug and stdio intrinsics *)
@@ -471,11 +476,11 @@ let delta eval env fi c v  =
     | CSymb(_),_ -> fail_constapp fi
     | Cgensym, TmRecord(fi,x) when Record.is_empty x -> TmConst(fi, CSymb(gen_symid()))
     | Cgensym,_ -> fail_constapp fi
-    | Ceqs(None), TmConst(fi,CSymb(id)) -> TmConst(fi, Ceqs(Some(id)))
-    | Ceqs(Some(id)), TmConst(fi,CSymb(id')) -> TmConst(fi, CBool(id == id'))
-    | Ceqs(_),_ -> fail_constapp fi
-    | CSym2hash, TmConst(fi,CSymb(id)) -> TmConst(fi, CInt(id))
-    | CSym2hash,_ -> fail_constapp fi
+    | Ceqsym(None), TmConst(fi,CSymb(id)) -> TmConst(fi, Ceqsym(Some(id)))
+    | Ceqsym(Some(id)), TmConst(fi,CSymb(id')) -> TmConst(fi, CBool(id == id'))
+    | Ceqsym(_),_ -> fail_constapp fi
+    | Csym2hash, TmConst(fi,CSymb(id)) -> TmConst(fi, CInt(id))
+    | Csym2hash,_ -> fail_constapp fi
 
     (* Python intrinsics *)
     | CPy v, t -> Pyffi.delta eval env fi v t

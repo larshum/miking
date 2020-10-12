@@ -76,12 +76,13 @@ and const =
 | Cfloorfi
 | Cceilfi
 | Croundfi
-| CInt2float
-| CString2float
+| Cint2float
+| Cstring2float
 (* MCore intrinsic: characters *)
 | CChar    of int
-| CChar2int
-| CInt2char
+| Ceqc     of int option
+| Cchar2int
+| Cint2char
 (* MCore intrinsic: sequences *)
 | CmakeSeq of int option
 | Clength
@@ -112,9 +113,9 @@ and const =
 (* MCore Symbols *)
 | CSymb of int
 | Cgensym
-| Ceqs of int option
-| CSym2hash
-(* External functions TODO: Should not be part of core language *)
+| Ceqsym of int option
+| Csym2hash
+(* External functions TODO(?,?): Should not be part of core language *)
 | CExt of Extast.ext
 | CSd of Sdast.ext
 | CPy of tm Pyast.ext
@@ -122,7 +123,7 @@ and const =
 (* Terms in MLang *)
 and cdecl   = CDecl   of info * ustring * ty
 and param   = Param   of info * ustring * ty
-and decl = (* TODO: Local? *)
+and decl = (* TODO(?,?): Local? *)
 | Data     of info * ustring * cdecl list
 | Inter    of info * ustring * param list * (pat * tm) list
 
