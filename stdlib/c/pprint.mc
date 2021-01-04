@@ -34,7 +34,7 @@ lang CPrettyPrint = CAst
   | CEApp { fun = fun, args = args } ->
     match pprintEnvGetStr env fun with (env,fun) then
       match mapAccumL printCExpr env args with (env,args) then
-        (env, _par (join [fun, "(", (strJoin ", " args), ")"]))
+        (env, join [fun, "(", (strJoin ", " args), ")"])
       else never
     else never
 
