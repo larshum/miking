@@ -59,6 +59,7 @@ let camlAllocName = nameSym "caml_alloc" in
 let doubleFieldName = nameSym "Double_field" in
 let storeDoubleFieldName = nameSym "Store_double_field" in
 let camlReturnName = nameSym "CAMLreturn" in
+let doubleArrayTagName = nameSym "Double_array_tag" in
 
 let cudaMallocName = nameSym "cudaMalloc" in
 let cudaMemcpyName = nameSym "cudaMemcpy" in
@@ -66,7 +67,7 @@ let cudaFreeName = nameSym "cudaFree" in
 let cudaMemcpyHostToDeviceName = nameSym "cudaMemcpyHostToDevice" in
 let cudaMemcpyDeviceToHostName = nameSym "cudaMemcpyDeviceToHost" in
 let cudaDeviceGetAttributeName = nameSym "cudaDeviceGetAttribute" in
-let cudaDevAttrMaxThreadsPerBlockName = nameSym "cudaDevAttrMaxThreadsPerBlockName" in
+let cudaDevAttrMaxThreadsPerBlockName = nameSym "cudaDevAttrMaxThreadsPerBlock" in
 let threadIdx = CEMember { lhs = CEVar { id = nameSym "threadIdx" }, id = "x" } in
 let blockIdx = CEMember { lhs = CEVar { id = nameSym "blockIdx" }, id = "x" } in
 let blockDim = CEMember { lhs = CEVar { id = nameSym "blockDim" }, id = "x" } in
@@ -371,7 +372,10 @@ let axpybody = [
     lhs = CEVar { id = axpyoutarr },
     rhs = CEApp {
       fun = camlAllocName,
-      args = [CEVar { id = axpyn }]
+      args = [
+        CEVar { id = axpyn },
+        CEVar { id = doubleArrayTagName }
+      ]
     }
   }},
 
