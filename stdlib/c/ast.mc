@@ -94,8 +94,7 @@ lang CAst
   -------------
 
   syn CType =
-  -- CTyIdent not really needed unless we add typedef
---| CTyIdent { id: Name }
+  | CTyIdent { id: Name }
   | CTyChar {}
   | CTyInt {}
   | CTyDouble {}

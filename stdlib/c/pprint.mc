@@ -119,10 +119,7 @@ lang CPrettyPrint = CAst
     else never
 
   sem printCType (decl: String) (env: PprintEnv) =
-
-  -- CTyIdent not really needed unless we add typedef
-  --| CTyIdent  { id = id } -> pprintEnvGetStr env id
-
+  | CTyIdent  { id = id } -> (env, _joinSpace (nameGetStr id) decl)
   | CTyChar {} -> (env, _joinSpace "char" decl)
   | CTyInt {}  -> (env, _joinSpace "int" decl)
   | CTyDouble {} -> (env, _joinSpace "double" decl)
