@@ -436,7 +436,7 @@ let prog = CPProg {
   tops = [addfdef, mulfdef, kerneldef, axpydef]
 } in
 
-let _ = printLn (printCProg [] prog) in
+-- let _ = printLn (printCProg [] prog) in
 
 utest length (printCProg [] prog) with 0 using geqi in
 
