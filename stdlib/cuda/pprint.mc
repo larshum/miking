@@ -8,7 +8,7 @@ lang CudaPrettyPrint = CudaAst + CPrettyPrint
         match mapAccumL printCExpr env args with (env,args) then
           match printCExpr env blocks with (env,blocksStr) then
             match printCExpr env tpb with (env, tpbStr) then
-              (env, _par (join [fun, "<<<", blocksStr, ", ", tpbStr, ">>>(", (strJoin ", " args), ")"]))
+              (env, join [fun, "<<<", blocksStr, ", ", tpbStr, ">>>(", (strJoin ", " args), ")"])
             else never
           else never
         else never
@@ -436,7 +436,7 @@ let prog = CPProg {
   tops = [addfdef, mulfdef, kerneldef, axpydef]
 } in
 
--- let _ = printLn (printCProg [] prog) in
+let _ = printLn (printCProg [] prog) in
 
 utest length (printCProg [] prog) with 0 using geqi in
 
