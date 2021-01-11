@@ -1,14 +1,8 @@
 include "cuda/ast.mc"
+include "cuda/ast-builder.mc"
 include "cuda/pprint.mc"
 include "mexpr/ast.mc"
 
-let cudaMalloc = nameSym "cudaMalloc"
-let cudaMemcpy = nameSym "cudaMemcpy"
-let cudaFree = nameSym "cudaFree"
-let cudaDeviceGetAttribute = nameSym "cudaDeviceGetAttribute"
-let cudaDevAttrMaxThreadsPerBlock = nameSym "cudaDevAttrMaxThreadsPerBlock"
-let cudaMemcpyHostToDevice = nameSym "cudaMemcpyHostToDevice"
-let cudaMemcpyDeviceToHost = nameSym "cudaMemcpyDeviceToHost"
 let wosizeVal = nameSym "Wosize_val"
 let opVal = nameSym "Op_val"
 let value = nameSym "value"
@@ -29,42 +23,33 @@ lang CudaKernelGenerate = CudaAst + MExprAst
   sem allocAndCopyToDevice =
   | (paramTy, paramName) ->
     let cudaParam = nameWithCudaTail paramName in
-    let sz = CEBinOp {
-      op = COMul (),
-      lhs = CEApp {
-        fun = wosizeVal,
-        args = [CEVar { id = paramName }]
-      },
-      rhs = CESizeOfType { ty = valuety }
-    } in
     (cudaParam, [
       CSDef {
         ty = CTyPtr { ty = valuety },
         id = Some cudaParam,
         init = None ()
       },
-      CSExpr { expr = CEApp {
-        fun = cudaMalloc,
-        args = [CEUnOp { op = COAddrOf (), arg = CEVar { id = cudaParam } }, sz]
-      }},
-      CSExpr { expr = CEApp {
-        fun = cudaMemcpy,
-        args = [
-          CEVar { id = cudaParam },
-          CEApp { fun = opVal, args = [CEVar { id = paramName}] },
-          CEBinOp {
-            op = COMul (),
-            lhs = CEApp { fun = wosizeVal, args = [CEVar { id = paramName }] },
-            rhs = CESizeOfType { ty = valuety }
+      cudaMalloc_ [
+        CEUnOp { op = COAddrOf (), arg = cudavar_ cudaParam },
+        CEBinOp {
+          op = COMul (),
+          lhs = CEApp {
+            fun = wosizeVal,
+            args = [cudavar_ paramName]
           },
-          CEVar { id = cudaMemcpyHostToDevice }
-        ]
-      }}
+          rhs = CESizeOfType { ty = valuety }
+        }
+      ],
+      cudaMemcpyH2D_ [
+        cudavar_ cudaParam,
+        CEApp { fun = opVal, args = [cudavar_ paramName] },
+        CEBinOp {
+          op = COMul (),
+          lhs = CEApp { fun = wosizeVal, args = [cudavar_ paramName] },
+          rhs = CESizeOfType { ty = valuety }
+        }
+      ]
     ])
-
-  sem freeStatement =
-  | cudaParam ->
-    CSExpr { expr = CEApp { fun = cudaFree, args = [CEVar { id = cudaParam }] } }
 
   sem kernelCall (name: Name) (params: [Name]) =
   | n ->
@@ -75,14 +60,7 @@ lang CudaKernelGenerate = CudaAst + MExprAst
       id = Some tpb,
       init = None ()
     } in
-    let tpbMaxThreadsCall = CSExpr { expr = CEApp {
-      fun = cudaDeviceGetAttribute,
-      args = [
-        CEUnOp { op = COAddrOf (), arg = CEVar { id = tpb } },
-        CEVar { id = cudaDevAttrMaxThreadsPerBlock },
-        CEInt { i = 0 }
-      ]
-    }} in
+    let tpbMaxThreadsCall = cudaGetMaxThreadsPerBlock_ tpb in
     let blocksDef = CSDef {
       ty = CTyInt (),
       id = Some blocks,
@@ -92,19 +70,19 @@ lang CudaKernelGenerate = CudaAst + MExprAst
           op = COSub (),
           lhs = CEBinOp {
             op = COAdd (),
-            lhs = CEVar { id = n },
-            rhs = CEVar { id = tpb }
+            lhs = cudavar_ n,
+            rhs = cudavar_ tpb
           },
           rhs = CEInt { i = 1 }
         },
-        rhs = CEVar { id = tpb }
+        rhs = cudavar_ tpb
       }})
     } in
     let kernelFunctionCall = CSExpr { expr = CudaEApp {
       fun = name,
-      args = map (lam param. CEVar { id = param }) params,
-      blocks = CEVar { id = blocks },
-      tpb = CEVar { id = tpb }
+      args = map (lam param. cudavar_ param) params,
+      blocks = cudavar_ blocks,
+      tpb = cudavar_ tpb
     }} in
     [tpbDecl, tpbMaxThreadsCall, blocksDef, kernelFunctionCall]
 
@@ -115,15 +93,9 @@ lang CudaKernelGenerate = CudaAst + MExprAst
 
     -- TODO: this approach only works for up to 5 parameters
     let paramFunName = join ["CAMLparam", int2string (length params)] in
-    let argNames = map (lam p. CEVar{ id = p.1 }) params in
-    let camlParam = CSExpr { expr = CEApp {
-      fun = nameSym paramFunName,
-      args = argNames
-    }} in
-    let camlLocal = CSExpr { expr = CEApp {
-      fun = nameSym "CAMLlocal1",
-      args = [CEVar { id = out }]
-    }} in
+    let argNames = map (lam p. cudavar_ p.1) params in
+    let camlParam = cudaAppStmt_ (nameSym paramFunName) argNames in
+    let camlLocal = cudaAppStmt_ (nameSym "CAMLlocal1") [cudavar_ out] in
 
     -- Define helper variable n which stores the size of the output array.
     let n = nameSym "n" in
@@ -134,7 +106,7 @@ lang CudaKernelGenerate = CudaAst + MExprAst
         fun = wosizeVal,
         -- TODO: base output array size on related input array, rather than
         -- hard coded to be based on first parameter
-        args = [CEVar { id = (head params).1 }]
+        args = [cudavar_ (head params).1]
       }})
     } in
 
@@ -144,17 +116,14 @@ lang CudaKernelGenerate = CudaAst + MExprAst
       id = Some cudaOut,
       init = None ()
     } in
-    let cudaOutAlloc = CSExpr { expr = CEApp {
-      fun = cudaMalloc,
-      args = [
-        CEUnOp { op = COAddrOf (), arg = CEVar { id = cudaOut } },
-        CEBinOp {
-          op = COMul (),
-          lhs = CEVar { id = n },
-          rhs = CESizeOfType { ty = valuety }
-        }
-      ]
-    }} in
+    let cudaOutAlloc = cudaMalloc_ [
+      CEUnOp { op = COAddrOf (), arg = cudavar_ cudaOut },
+      CEBinOp {
+        op = COMul (),
+        lhs = cudavar_ n,
+        rhs = CESizeOfType { ty = valuety }
+      }
+    ] in
 
     -- For each argument, move data host -> device
     let moveToDevice = map allocAndCopyToDevice params in
@@ -167,40 +136,30 @@ lang CudaKernelGenerate = CudaAst + MExprAst
     -- Allocate output array on host and copy data device -> host
     let outAlloc = CSExpr { expr = CEBinOp {
       op = COAssign (),
-      lhs = CEVar { id = out },
+      lhs = cudavar_ out,
       rhs = CEApp {
         fun = camlAlloc,
         args = [
-          CEVar { id = n },
-          CEVar { id = doubleArrayTag } -- TODO: select different tag based on output type
+          cudavar_ n,
+          cudavar_ doubleArrayTag -- TODO: select different tag based on output type
         ]
       }
     }} in
-    let deviceToHostMemcpy = CSExpr { expr = CEApp {
-      fun = cudaMemcpy,
-      args = [
-        CEApp {
-          fun = opVal,
-          args = [CEVar { id = out }]
-        },
-        CEVar { id = cudaOut },
-        CEBinOp {
-          op = COMul (),
-          lhs = CEApp { fun = wosizeVal, args = [CEVar { id = out }] },
-          rhs = CESizeOfType { ty = valuety }
-        },
-        CEVar { id = cudaMemcpyDeviceToHost }
-      ]
-    }} in
+    let deviceToHostMemcpy = cudaMemcpyD2H_ [
+      CEApp { fun = opVal, args = [cudavar_ out] },
+      cudavar_ cudaOut,
+      CEBinOp {
+        op = COMul (),
+        lhs = CEApp { fun = wosizeVal, args = [cudavar_ out] },
+        rhs = CESizeOfType { ty = valuety }
+      }
+    ] in
 
     -- Free GPU memory of all variables that were copied there
-    let freeStmts = map freeStatement cudaParams in
+    let freeStmts = map cudaFree_ cudaParams in
 
     -- Return to OCaml
-    let camlReturn = CSExpr { expr = CEApp {
-      fun = camlReturn,
-      args = [CEVar { id = out }]
-    }} in
+    let camlReturn = cudaAppStmt_ camlReturn [cudavar_ out] in
 
     let cparams = map (lam p. (valuety, p.1)) params in
     let stmts = join [
