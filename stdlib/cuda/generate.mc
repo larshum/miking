@@ -3,15 +3,6 @@ include "cuda/ast-builder.mc"
 include "cuda/pprint.mc"
 include "mexpr/ast.mc"
 
-let wosizeVal = nameSym "Wosize_val"
-let opVal = nameSym "Op_val"
-let value = nameSym "value"
-let camlAlloc = nameSym "caml_alloc"
-let doubleArrayTag = nameSym "Double_array_tag"
-let camlReturn = nameSym "CAMLreturn"
-let valuety = use CudaAst in
-  CTyIdent { id = value }
-
 let nameWithCudaTail = lam name.
   nameSym (join [nameGetStr name, "_cuda"])
 
@@ -47,7 +38,7 @@ lang CudaWrapperGenerate = CudaAst + MExprAst
     let cudaParam = nameWithCudaTail paramName in
     (cudaParam, [
       CSDef {
-        ty = CTyPtr { ty = valuety },
+        ty = CTyPtr { ty = valueTy_ },
         id = Some cudaParam,
         init = None ()
       },
@@ -55,20 +46,17 @@ lang CudaWrapperGenerate = CudaAst + MExprAst
         CEUnOp { op = COAddrOf (), arg = cudavar_ cudaParam },
         CEBinOp {
           op = COMul (),
-          lhs = CEApp {
-            fun = wosizeVal,
-            args = [cudavar_ paramName]
-          },
-          rhs = CESizeOfType { ty = valuety }
+          lhs = camlWosizeVal_ paramName,
+          rhs = CESizeOfType { ty = valueTy_ }
         }
       ],
       cudaMemcpyH2D_ [
         cudavar_ cudaParam,
-        CEApp { fun = opVal, args = [cudavar_ paramName] },
+        camlOpVal_ paramName,
         CEBinOp {
           op = COMul (),
-          lhs = CEApp { fun = wosizeVal, args = [cudavar_ paramName] },
-          rhs = CESizeOfType { ty = valuety }
+          lhs = camlWosizeVal_ paramName,
+          rhs = CESizeOfType { ty = valueTy_ }
         }
       ]
     ])
@@ -121,17 +109,14 @@ lang CudaWrapperGenerate = CudaAst + MExprAst
     let nDecl = CSDef {
       ty = CTyInt (),
       id = Some n,
-      init = Some (CIExpr { expr = CEApp {
-        fun = wosizeVal,
-        -- TODO: base output array size on related input array, rather than
-        -- hard coded to be based on first parameter
-        args = [cudavar_ (head params).1]
-      }})
+      -- TODO: base output array size on related input array, rather than
+      -- hard coded to be based on first parameter
+      init = Some (CIExpr { expr = camlWosizeVal_ (head params).1 })
     } in
 
     -- Define output variable and allocate its memory
     let outDecl = CSDef {
-      ty = CTyPtr { ty = valuety },
+      ty = CTyPtr { ty = valueTy_ },
       id = Some cudaOut,
       init = None ()
     } in
@@ -140,7 +125,7 @@ lang CudaWrapperGenerate = CudaAst + MExprAst
       CEBinOp {
         op = COMul (),
         lhs = cudavar_ n,
-        rhs = CESizeOfType { ty = valuety }
+        rhs = CESizeOfType { ty = valueTy_ }
       }
     ] in
 
@@ -156,21 +141,16 @@ lang CudaWrapperGenerate = CudaAst + MExprAst
     let outAlloc = CSExpr { expr = CEBinOp {
       op = COAssign (),
       lhs = cudavar_ out,
-      rhs = CEApp {
-        fun = camlAlloc,
-        args = [
-          cudavar_ n,
-          cudavar_ doubleArrayTag -- TODO: select different tag based on output type
-        ]
-      }
+      -- TODO: select different tag based on output type
+      rhs = camlAlloc_ n _doubleArrayTag
     }} in
     let deviceToHostMemcpy = cudaMemcpyD2H_ [
-      CEApp { fun = opVal, args = [cudavar_ out] },
+      camlOpVal_ out,
       cudavar_ cudaOut,
       CEBinOp {
         op = COMul (),
-        lhs = CEApp { fun = wosizeVal, args = [cudavar_ out] },
-        rhs = CESizeOfType { ty = valuety }
+        lhs = camlWosizeVal_ out,
+        rhs = CESizeOfType { ty = valueTy_ }
       }
     ] in
 
@@ -178,19 +158,19 @@ lang CudaWrapperGenerate = CudaAst + MExprAst
     let freeStmts = map cudaFree_ cudaParams in
 
     -- Return to OCaml
-    let camlReturn = cudaAppStmt_ camlReturn [cudavar_ out] in
+    let returnStmt = camlReturn_ out in
 
-    let cparams = map (lam p. (valuety, p.1)) params in
+    let cparams = map (lam p. (valueTy_, p.1)) params in
     let stmts = join [
       camlParam, [camlLocal, nDecl, outDecl, cudaOutAlloc],
       cudaCopyStmts,
       kernelStmts,
       [outAlloc, deviceToHostMemcpy],
       freeStmts,
-      [camlReturn]
+      [returnStmt]
     ] in
     CudaFun {
-      ret = CTyIdent { id = value },
+      ret = CTyIdent { id = _value },
       id = name,
       params = cparams,
       body = stmts,

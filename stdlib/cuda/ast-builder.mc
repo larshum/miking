@@ -13,9 +13,13 @@ let cudavar_ = use CudaAst in
   lam n.
   CEVar { id = n }
 
+let cudaApp_ = use CudaAst in
+  lam fun. lam args.
+  CEApp { fun = fun, args = args }
+
 let cudaAppStmt_ = use CudaAst in
   lam fun. lam args.
-  CSExpr { expr = CEApp { fun = fun, args = args } }
+  CSExpr { expr = cudaApp_ fun args }
 
 let cudaMalloc_ = use CudaAst in
   lam args.
@@ -61,6 +65,13 @@ let _camlXparam = [
   nameSym "CAMLxparam5"
 ]
 
+let _wosizeVal = nameSym "Wosize_val"
+let _opVal = nameSym "Op_val"
+let _value = nameSym "value"
+let _camlAlloc = nameSym "caml_alloc"
+let _doubleArrayTag = nameSym "Double_array_tag"
+let _camlReturn = nameSym "CAMLreturn"
+
 let camlParams_ = use CudaAst in
   lam paramNames.
   let n = length paramNames in
@@ -76,3 +87,24 @@ let camlXparams_ = use CudaAst in
     cudaAppStmt_ (get _camlXparam n) paramNames
   else
     error "CAMLxparam is only defined for between one and five arguments"
+
+let camlWosizeVal_ = use CudaAst in
+  lam varName.
+  cudaApp_ _wosizeVal [cudavar_ varName]
+
+let camlOpVal_ = use CudaAst in
+  lam varName.
+  cudaApp_ _opVal [cudavar_ varName]
+
+let camlAlloc_ = use CudaAst in
+  lam n. lam tag.
+  cudaApp_ _camlAlloc [cudavar_ n, cudavar_ tag]
+
+let camlReturn_ = use CudaAst in
+  lam retName.
+  cudaAppStmt_ _camlReturn [cudavar_ retName]
+
+let valueTy_ = use CudaAst in
+  CTyIdent { id = _value }
+let valuePtrTy_ = use CudaAst in
+  CTyPtr { ty = valueTy_ }
