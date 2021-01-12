@@ -40,3 +40,39 @@ let cudaGetMaxThreadsPerBlock_ = use CudaAst in
     cudavar_ _cudaDevAttrMaxThreadsPerBlock,
     CEInt { i = 0 }
   ]
+
+-- OCaml related definitions
+
+let _camlParam = [
+  nameSym "CAMLparam0",
+  nameSym "CAMLparam1",
+  nameSym "CAMLparam2",
+  nameSym "CAMLparam3",
+  nameSym "CAMLparam4",
+  nameSym "CAMLparam5"
+]
+
+let _camlXparam = [
+  null,
+  nameSym "CAMLxparam1",
+  nameSym "CAMLxparam2",
+  nameSym "CAMLxparam3",
+  nameSym "CAMLxparam4",
+  nameSym "CAMLxparam5"
+]
+
+let camlParams_ = use CudaAst in
+  lam paramNames.
+  let n = length paramNames in
+  if and (geqi n 0) (leqi n 5) then
+    cudaAppStmt_ (get _camlParam n) paramNames
+  else
+    error "CAMLparam is only defined for between zero and five arguments"
+
+let camlXparams_ = use CudaAst in
+  lam paramNames.
+  let n = length paramNames in
+  if and (gti n 0) (leqi n 5) then
+    cudaAppStmt_ (get _camlXparam n) paramNames
+  else
+    error "CAMLxparam is only defined for between one and five arguments"

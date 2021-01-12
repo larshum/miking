@@ -18,6 +18,28 @@ let nameWithCudaTail = lam name.
 let nameWithKernelTail = lam name.
   nameSym (join [nameGetStr name, "_kernel"])
 
+-- Generates CAMLparam and CAMLxparam statements which are used to declare the
+-- statements passsed from OCaml to the kernel function. When more than five
+-- parameters are passed from OCaml, one or more calls to a separate function
+-- have to be made.
+let _generateCamlParamDecl = lam params.
+  recursive let generateParamCalls = lam params. lam firstParams.
+    let n = length params in
+    let headParams = if lti n 5 then n else 5 in
+    match splitAt params headParams with (lhs, rhs) then
+      let argNames = map (lam p. cudavar_ p.1) lhs in
+      let camlParamCall = (if firstParams then
+        camlParams_ argNames
+      else
+        camlXparams_ argNames) in
+      if null rhs then
+        [camlParamCall]
+      else
+        cons camlParamCall (generateParamCalls rhs false)
+    else never
+  in
+  generateParamCalls params true
+
 lang CudaKernelGenerate = CudaAst + MExprAst
   -- TODO: implement copying for non-array types
   sem allocAndCopyToDevice =
@@ -91,10 +113,7 @@ lang CudaKernelGenerate = CudaAst + MExprAst
     let out = nameSym "out" in
     let cudaOut = nameSym "cuda_out" in
 
-    -- TODO: this approach only works for up to 5 parameters
-    let paramFunName = join ["CAMLparam", int2string (length params)] in
-    let argNames = map (lam p. cudavar_ p.1) params in
-    let camlParam = cudaAppStmt_ (nameSym paramFunName) argNames in
+    let camlParam = _generateCamlParamDecl params in
     let camlLocal = cudaAppStmt_ (nameSym "CAMLlocal1") [cudavar_ out] in
 
     -- Define helper variable n which stores the size of the output array.
@@ -163,7 +182,7 @@ lang CudaKernelGenerate = CudaAst + MExprAst
 
     let cparams = map (lam p. (valuety, p.1)) params in
     let stmts = join [
-      [camlParam, camlLocal, nDecl, outDecl, cudaOutAlloc],
+      camlParam, [camlLocal, nDecl, outDecl, cudaOutAlloc],
       cudaCopyStmts,
       kernelStmts,
       [outAlloc, deviceToHostMemcpy],
