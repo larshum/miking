@@ -40,7 +40,7 @@ let _generateCamlParamDecl = lam params.
   in
   generateParamCalls params true
 
-lang CudaKernelGenerate = CudaAst + MExprAst
+lang CudaWrapperGenerate = CudaAst + MExprAst
   -- TODO: implement copying for non-array types
   sem allocAndCopyToDevice =
   | (paramTy, paramName) ->
@@ -200,7 +200,7 @@ end
 
 mexpr
 
-use CudaKernelGenerate in
+use CudaWrapperGenerate in
 use CudaPrettyPrint in
 
 let templateName = nameSym "fold" in
