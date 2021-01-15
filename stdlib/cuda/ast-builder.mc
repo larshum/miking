@@ -27,11 +27,11 @@ let cudaMalloc_ = use CudaAst in
 
 let cudaMemcpyH2D_ = use CudaAst in
   lam args.
-  cudaAppStmt_ _cudaMemcpy (join [args, [cudavar_ _cudaMemcpyHostToDevice]])
+  cudaAppStmt_ _cudaMemcpy (snoc args (cudavar_ _cudaMemcpyHostToDevice))
 
 let cudaMemcpyD2H_ = use CudaAst in
   lam args.
-  cudaAppStmt_ _cudaMemcpy (join [args, [cudavar_ _cudaMemcpyDeviceToHost]])
+  cudaAppStmt_ _cudaMemcpy (snoc args (cudavar_ _cudaMemcpyDeviceToHost))
 
 let cudaFree_ = use CudaAst in
   lam param.
@@ -65,11 +65,13 @@ let _camlXparam = [
   nameSym "CAMLxparam5"
 ]
 
-let _wosizeVal = nameSym "Wosize_val"
-let _opVal = nameSym "Op_val"
+let _doubleVal = nameSym "Double_val"
 let _value = nameSym "value"
 let _camlAlloc = nameSym "caml_alloc"
-let _doubleArrayTag = nameSym "Double_array_tag"
+let _camlBaArrayVal = nameSym "Caml_ba_array_val"
+let _camlBaDataVal = nameSym "Caml_ba_data_val"
+let _camlBaByteSize = nameSym "caml_ba_byte_size"
+let _camlBaNumElts = nameSym "caml_ba_num_elts"
 let _camlReturn = nameSym "CAMLreturn"
 
 let camlParams_ = use CudaAst in
@@ -88,13 +90,21 @@ let camlXparams_ = use CudaAst in
   else
     error "CAMLxparam is only defined for between one and five arguments"
 
-let camlWosizeVal_ = use CudaAst in
+let camlBaArrayVal_ = use CudaAst in
   lam varName.
-  cudaApp_ _wosizeVal [cudavar_ varName]
+  cudaApp_ _camlBaArrayVal [cudavar_ varName]
 
-let camlOpVal_ = use CudaAst in
+let camlBaDataVal_ = use CudaAst in
   lam varName.
-  cudaApp_ _opVal [cudavar_ varName]
+  cudaApp_ _camlBaDataVal [cudavar_ varName]
+
+let camlBaBytes_ = use CudaAst in
+  lam varName.
+  cudaApp_ _camlBaByteSize [camlBaArrayVal_ varName]
+
+let camlBaElems_ = use CudaAst in
+  lam varName.
+  cudaApp_ _camlBaNumElts [camlBaArrayVal_ varName]
 
 let camlAlloc_ = use CudaAst in
   lam n. lam tag.
@@ -106,5 +116,6 @@ let camlReturn_ = use CudaAst in
 
 let valueTy_ = use CudaAst in
   CTyIdent { id = _value }
+
 let valuePtrTy_ = use CudaAst in
   CTyPtr { ty = valueTy_ }

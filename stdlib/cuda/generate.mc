@@ -3,11 +3,18 @@ include "cuda/ast-builder.mc"
 include "cuda/pprint.mc"
 include "mexpr/ast.mc"
 
-let nameWithCudaTail = lam name.
+let _nameWithCudaTail = lam name.
   nameSym (join [nameGetStr name, "_cuda"])
 
-let nameWithKernelTail = lam name.
+let _nameWithKernelTail = lam name.
   nameSym (join [nameGetStr name, "_kernel"])
+
+let _nameWithBytesTail = lam name.
+  nameSym (join [nameGetStr name, "_bytes"])
+
+let _isPtrType = lam ty.
+  use CudaAst in
+  match ty with CTyPtr { ty = _ } then true else false
 
 -- Generates CAMLparam and CAMLxparam statements which are used to declare the
 -- statements passsed from OCaml to the kernel function. When more than five
@@ -32,39 +39,52 @@ let _generateCamlParamDecl = lam params.
   generateParamCalls params true
 
 lang CudaWrapperGenerate = CudaAst + MExprAst
-  -- TODO: implement copying for non-array types
   sem allocAndCopyToDevice =
   | (paramTy, paramName) ->
-    let cudaParam = nameWithCudaTail paramName in
-    (cudaParam, [
-      CSDef {
-        ty = CTyPtr { ty = valueTy_ },
-        id = Some cudaParam,
+    let paramCudaName = _nameWithCudaTail paramName in
+    match paramTy with CTyPtr { ty = ty } then
+      let paramCudaDecl = CSDef {
+        ty = paramTy,
+        id = Some paramCudaName,
         init = None ()
-      },
-      cudaMalloc_ [
-        CEUnOp { op = COAddrOf (), arg = cudavar_ cudaParam },
-        CEBinOp {
-          op = COMul (),
-          lhs = camlWosizeVal_ paramName,
-          rhs = CESizeOfType { ty = valueTy_ }
-        }
-      ],
-      cudaMemcpyH2D_ [
-        cudavar_ cudaParam,
-        camlOpVal_ paramName,
-        CEBinOp {
-          op = COMul (),
-          lhs = camlWosizeVal_ paramName,
-          rhs = CESizeOfType { ty = valueTy_ }
-        }
-      ]
-    ])
+      } in
+      let paramNameBytes = _nameWithBytesTail paramName in
+      let paramBytesDef = CSDef {
+        ty = CTyInt (),
+        id = Some paramNameBytes,
+        init = Some ( CIExpr { expr = camlBaBytes_ paramName })
+      } in
+      let paramCudaMalloc = cudaMalloc_ [
+        CEUnOp { op = COAddrOf (), arg = cudavar_ paramCudaName },
+        cudavar_ paramNameBytes
+      ] in
+      let paramCudaMemcpy = cudaMemcpyH2D_ [
+        cudavar_ paramCudaName,
+        camlBaDataVal_ paramName,
+        cudavar_ paramNameBytes
+      ] in
+      (paramCudaName, [
+        paramCudaDecl, paramBytesDef, paramCudaMalloc, paramCudaMemcpy
+      ])
+    else match paramTy with CTyDouble () then
+      let paramCudaDef = CSDef {
+        ty = paramTy,
+        id = Some paramCudaName,
+        init = Some (CIExpr { expr = cudaApp_ _doubleVal [cudavar_ paramName] })
+      } in
+      (paramCudaName, [paramCudaDef])
+    else error "Unsupported CUDA type"
 
   sem kernelCall (name: Name) (params: [Name]) =
-  | n ->
+  | out ->
+    let n = nameSym "n" in
     let tpb = nameSym "tpb" in
     let blocks = nameSym "blocks" in
+    let nDef = CSDef {
+      ty = CTyInt (),
+      id = Some n,
+      init = Some (CIExpr { expr = camlBaElems_ out })
+    } in
     let tpbDecl = CSDef {
       ty = CTyInt (),
       id = Some tpb,
@@ -88,91 +108,78 @@ lang CudaWrapperGenerate = CudaAst + MExprAst
         rhs = cudavar_ tpb
       }})
     } in
+    let params = snoc params n in
     let kernelFunctionCall = CSExpr { expr = CudaEApp {
       fun = name,
       args = map (lam param. cudavar_ param) params,
       blocks = cudavar_ blocks,
       tpb = cudavar_ tpb
     }} in
-    [tpbDecl, tpbMaxThreadsCall, blocksDef, kernelFunctionCall]
+    [nDef, tpbDecl, tpbMaxThreadsCall, blocksDef, kernelFunctionCall]
 
-  sem cudaTemplate (name: Name) =
-  | params ->
+  sem cudaTemplate (name: Name) (params: [(CType, Name)]) =
+  | outty ->
     let out = nameSym "out" in
-    let cudaOut = nameSym "cuda_out" in
+    let outBytesName = _nameWithBytesTail out in
+    let outCudaName = _nameWithCudaTail out in
 
-    let camlParam = _generateCamlParamDecl params in
-    let camlLocal = cudaAppStmt_ (nameSym "CAMLlocal1") [cudavar_ out] in
+    -- Declare all OCaml parameters
+    let allParams = snoc params (outty, out) in
+    let camlParam = _generateCamlParamDecl allParams in
 
-    -- Define helper variable n which stores the size of the output array.
-    let n = nameSym "n" in
-    let nDecl = CSDef {
-      ty = CTyInt (),
-      id = Some n,
-      -- TODO: base output array size on related input array, rather than
-      -- hard coded to be based on first parameter
-      init = Some (CIExpr { expr = camlWosizeVal_ (head params).1 })
-    } in
-
-    -- Define output variable and allocate its memory
-    let outDecl = CSDef {
-      ty = CTyPtr { ty = valueTy_ },
-      id = Some cudaOut,
+    -- Allocate output array on device
+    let outCudaDecl = CSDef {
+      ty = outty,
+      id = Some outCudaName,
       init = None ()
     } in
-    let cudaOutAlloc = cudaMalloc_ [
-      CEUnOp { op = COAddrOf (), arg = cudavar_ cudaOut },
-      CEBinOp {
-        op = COMul (),
-        lhs = cudavar_ n,
-        rhs = CESizeOfType { ty = valueTy_ }
-      }
+    let outBytes = CSDef {
+      ty = CTyInt (),
+      id = Some outBytesName,
+      init = Some (CIExpr { expr = camlBaBytes_ out })
+    } in
+    let outCudaMalloc = cudaMalloc_ [
+      CEUnOp { op = COAddrOf (), arg = cudavar_ outCudaName },
+      cudavar_ outBytesName
     ] in
 
-    -- For each argument, move data host -> device
+    -- For each argument (except output), move data host -> device
     let moveToDevice = map allocAndCopyToDevice params in
-    let cudaParams = map (lam p. p.0) moveToDevice in
+    let cudaParamNames = map (lam p. p.0) moveToDevice in
     let cudaCopyStmts = join (map (lam p. p.1) moveToDevice) in
     
-    let kernelName = nameWithKernelTail name in
-    let kernelStmts = kernelCall kernelName cudaParams n in
+    let kernelName = _nameWithKernelTail name in
+    let kernelParams = snoc cudaParamNames outCudaName in
+    let kernelStmts = kernelCall kernelName kernelParams out in
 
-    -- Allocate output array on host and copy data device -> host
-    let outAlloc = CSExpr { expr = CEBinOp {
-      op = COAssign (),
-      lhs = cudavar_ out,
-      -- TODO: select different tag based on output type
-      rhs = camlAlloc_ n _doubleArrayTag
-    }} in
+    -- Copy data to output array (device -> host)
     let deviceToHostMemcpy = cudaMemcpyD2H_ [
-      camlOpVal_ out,
-      cudavar_ cudaOut,
-      CEBinOp {
-        op = COMul (),
-        lhs = camlWosizeVal_ out,
-        rhs = CESizeOfType { ty = valueTy_ }
-      }
+      camlBaDataVal_ out,
+      cudavar_ outCudaName,
+      cudavar_ outBytesName
     ] in
 
-    -- Free GPU memory of all variables that were copied there
-    let freeStmts = map cudaFree_ cudaParams in
+    -- Free all memory allocated on GPU
+    let cudaAllocatedParamNames = snoc
+      (map (lam p. p.1)
+        (filter (lam p. _isPtrType p.0)
+          (zipWith (lam p. lam cp. (p.0, cp)) params cudaParamNames)))
+      outCudaName
+    in
+    let freeStmts = map cudaFree_ cudaAllocatedParamNames in
 
     -- Return to OCaml
     let returnStmt = camlReturn_ out in
 
-    let cparams = map (lam p. (valueTy_, p.1)) params in
     let stmts = join [
-      camlParam, [camlLocal, nDecl, outDecl, cudaOutAlloc],
-      cudaCopyStmts,
-      kernelStmts,
-      [outAlloc, deviceToHostMemcpy],
-      freeStmts,
+      camlParam, [outCudaDecl, outBytes, outCudaMalloc],
+      cudaCopyStmts, kernelStmts, [deviceToHostMemcpy], freeStmts,
       [returnStmt]
     ] in
     CudaFun {
       ret = CTyIdent { id = _value },
       id = name,
-      params = cparams,
+      params = map (lam p. (valueTy_, p.1)) allParams,
       body = stmts,
       annot = [CudaExternC ()]
     }
@@ -183,17 +190,18 @@ mexpr
 use CudaWrapperGenerate in
 use CudaPrettyPrint in
 
-let templateName = nameSym "fold" in
+let templateName = nameSym "scale" in
 let params = [
-  (TySeq { ty = TyFloat ()}, nameSym "a")
+  (CTyPtr { ty = CTyDouble ()}, nameSym "a"),
+  (CTyDouble (), nameSym "s")
 ] in
-let outty = TyFloat () in
+let outty = CTyPtr { ty = CTyDouble () } in
 let program = CPProg {
-  includes = ["<caml/alloc.h>", "<caml/memory.h>", "<caml/mlvalues.h>"],
-  tops = [cudaTemplate templateName params]
+  includes = ["<caml/alloc.h>", "<caml/bigarray.h>", "<caml/memory.h>", "<caml/mlvalues.h>"],
+  tops = [cudaTemplate templateName params outty]
 } in
 
-let _ = printLn (printCProg [] program) in
+-- let _ = printLn (printCProg [] program) in
 
 utest length (printCProg [] program) with 0 using geqi in
 
