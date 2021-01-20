@@ -1,6 +1,17 @@
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 
+lang OCamlRecord
+  syn Expr =
+  | OTmRecordDecl { ident: Name, fieldNames: [String], inexpr: Expr }
+
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | OTmRecordDecl t -> OTmRecordDecl {t with inexpr = f t.inexpr}
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | OTmRecordDecl t -> f acc t.inexpr
+end
+
 lang OCamlMatch
   syn Expr =
   | OTmMatch
@@ -32,6 +43,7 @@ lang OCamlAst = FunAst + LetAst + RecLetsAst + ArithIntAst + ShiftIntAst
                 + CharAst + OCamlMatch + NamedPat + IntPat + CharPat
                 + BoolPat + OCamlTuple + OCamlData
                 + CharAst + FloatIntConversionAst
+                + RecordAst + OCamlRecord
 end
 
 mexpr

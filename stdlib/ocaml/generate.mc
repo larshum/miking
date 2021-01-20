@@ -227,8 +227,39 @@ lang OCamlGenerate = MExprAst + OCamlAst
     else never
 end
 
-lang OCamlTest = OCamlGenerate + OCamlPrettyPrint + MExprSym + ConstEq
-                 + IntEq + BoolEq + CharEq + FloatEq
+let _objReprName = nameSym "Obj.repr"
+
+let _objRepr = lam t. app_ (nvar_ _objReprName) t
+
+lang OCamlObjWrap = OCamlAst
+  sem objWrapRec =
+  | (TmConst {val = (CInt _) | (CFloat _) | (CChar _) | (CBool _)}) & t ->
+    _objRepr t
+  | t -> smap_Expr_Expr objWrapRec t
+end
+
+lang OCamlRecordDeclGenerate = OCamlAst
+  sem collectRecordFields (decls: [[String]]) =
+  | TmRecord { bindings = bindings } ->
+    if eqi (assocLength bindings) 0 then
+      decls
+    else
+      let decl = assocKeys {eq=eqString} bindings in
+      cons decl decls
+  | expr -> sfold_Expr_Expr collectRecordFields decls expr
+
+  sem declGenerate =
+  | expr ->
+    let records = collectRecordFields [] expr in
+    foldl (lam acc. lam fields.
+      let ident = nameSym "_ocamlRecordType" in
+      OTmRecordDecl { ident = ident, fieldNames = fields, inexpr = acc }
+    ) expr records
+end
+
+lang OCamlTest = OCamlGenerate + OCamlObjWrap + OCamlRecordDeclGenerate
+                 + OCamlPrettyPrint + MExprSym + OCamlSym + ConstEq + IntEq
+                 + BoolEq + CharEq + FloatEq
 
 mexpr
 
@@ -688,5 +719,13 @@ utest testInt2float with generate testInt2float using sameSemantics in
 -- TODO(Oscar Eriksson, 2020-12-7) We need to think about how we should compile strings.
 -- let testString2float = string2float_ (str_ "1.5") in
 -- utest testString2float with generate testString2float using sameSemantics in
+
+-- Records
+let testEmptyRec =
+  bind_ (ulet_ "r" (record_ [("a", int_ 5), ("b", int_ 0), ("c", float_ 1.34)]))
+    (recordupdate_ (var_ "r") "b" (int_ 1))
+in
+let r = objWrapRec (generate (declGenerate testEmptyRec)) in
+let _ = print (expr2str (symbolize r)) in
 
 ()

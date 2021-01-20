@@ -250,6 +250,18 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   | CChar {val = c} -> show_char c
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
+  | OTmRecordDecl { ident = ident, fieldNames = fieldNames, inexpr = inexpr } ->
+    let toObjTypedField = lam field.
+      join [pprintLabelString field, " : Obj.t"]
+    in
+    match pprintVarName env ident with (env,ident) then
+      match pprintCode indent env inexpr with (env,inexpr) then
+        let typedFields = map toObjTypedField fieldNames in
+        (env, join [
+          "type ", ident, " = {", strJoin "; " typedFields, "};;",
+          pprintNewline indent, inexpr])
+      else never
+    else never
   | OTmConApp {ident = ident, args = []} -> pprintConName env ident
   | OTmConApp {ident = ident, args = [arg]} ->
     match pprintConName env ident with (env, ident) then
@@ -261,6 +273,45 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
     match pprintConName env ident with (env, ident) then
       match mapAccumL (pprintCode indent) env args with (env, args) then
         (env, join [ident, " (", strJoin ", " args, ")"])
+      else never
+    else never
+  | TmRecord t ->
+    if eqi (length t.bindings) 0 then (env,"{}")
+    else match _record2tuple (TmRecord t) with Some tms then
+      match mapAccumL (lam env. lam e. pprintCode indent env e) env tms
+      with (env,tupleExprs) then
+        let merged = match tupleExprs with [e] then
+                       concat e ","
+                     else strJoin ", " tupleExprs in
+        (env, join ["(", merged, ")"])
+      else never
+    else
+      let innerIndent = pprintIncr (pprintIncr indent) in
+      match
+        assocMapAccum {eq=eqString}
+          (lam env. lam k. lam v.
+             match pprintCode innerIndent env v with (env, str) then
+               (env,
+                join [pprintLabelString k, " =", pprintNewline innerIndent,
+                      str])
+             else never)
+           env t.bindings
+      with (env, bindMap) then
+        let binds = assocValues {eq=eqString} bindMap in
+        let merged =
+          strJoin (concat ";" (pprintNewline (pprintIncr indent))) binds
+        in
+        (env,join ["{ ", merged, " }"])
+      else never
+  | TmRecordUpdate t ->
+    let i = pprintIncr indent in
+    let ii = pprintIncr i in
+    match pprintCode i env t.rec with (env,rec) then
+      match pprintCode ii env t.value with (env,value) then
+        (env,join ["{ ", rec, pprintNewline i,
+                   "with", pprintNewline i,
+                   pprintLabelString t.key, " =", pprintNewline ii, value,
+                   " }"])
       else never
     else never
   | TmLam {ident = id, body = b} ->
