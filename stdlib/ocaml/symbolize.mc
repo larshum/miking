@@ -8,12 +8,12 @@ lang OCamlSym =
   + OCamlRecord
 
   sem symbolizeExpr (env : Env) =
-  | OTmRecordDecl { ident = ident, fieldNames = fieldNames, inexpr = inexpr } ->
+  | OTmRecordDecl { ident = ident, fields = fields, inexpr = inexpr } ->
     let ident =
       if nameHasSym ident then ident else nameSetNewSym ident
     in
     let inexpr = symbolizeExpr env inexpr in
-    OTmRecordDecl { ident = ident, fieldNames = fieldNames, inexpr = inexpr }
+    OTmRecordDecl { ident = ident, fields = fields, inexpr = inexpr }
   | OTmMatch {target = target, arms = arms} ->
     let symbArm = lam arm. match arm with (pat, expr) then
       match symbolizePat env assocEmpty pat with (patEnv, pat) then

@@ -3,7 +3,7 @@ include "mexpr/ast-builder.mc"
 
 lang OCamlRecord
   syn Expr =
-  | OTmRecordDecl { ident: Name, fieldNames: [String], inexpr: Expr }
+  | OTmRecordDecl { ident: Name, fields: AssocMap String Type, inexpr: Expr }
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | OTmRecordDecl t -> OTmRecordDecl {t with inexpr = f t.inexpr}

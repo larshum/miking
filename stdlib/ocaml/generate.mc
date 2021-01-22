@@ -228,33 +228,43 @@ lang OCamlGenerate = MExprAst + OCamlAst
 end
 
 let _objReprName = nameSym "Obj.repr"
+let _objObjName = nameSym "Obj.obj"
+let _objTypeName = nameSym "Obj.t"
 
 let _objRepr = lam t. app_ (nvar_ _objReprName) t
+let _objObj = lam t. app_ (nvar_ _objObjName) t
 
 lang OCamlObjWrap = OCamlAst
   sem objWrapRec =
+  | TmVar _ & t ->
+    _objObj t
   | (TmConst {val = (CInt _) | (CFloat _) | (CChar _) | (CBool _)}) & t ->
     _objRepr t
+  | TmRecord _ & t ->
+    _objRepr (smap_Expr_Expr objWrapRec t)
   | t -> smap_Expr_Expr objWrapRec t
 end
 
-lang OCamlRecordDeclGenerate = OCamlAst
-  sem collectRecordFields (decls: [[String]]) =
+lang OCamlRecordDeclGenerate = OCamlAst + VarTypeAst
+  sem accumRecordDecls (decls: [AssocMap String Type]) =
   | TmRecord { bindings = bindings } ->
     if eqi (assocLength bindings) 0 then
       decls
     else
-      let decl = assocKeys {eq=eqString} bindings in
+      let objType = lam _. TyVar { ident = _objTypeName } in
+      let decl = assocMap {eq=eqString} objType bindings in
+      let bindingExprs = assocValues {eq=eqString} bindings in
+      let decls = foldl accumRecordDecls decls bindingExprs in
       cons decl decls
-  | expr -> sfold_Expr_Expr collectRecordFields decls expr
+  | expr -> sfold_Expr_Expr accumRecordDecls decls expr
 
   sem declGenerate =
   | expr ->
-    let records = collectRecordFields [] expr in
+    let recordDecls = accumRecordDecls [] expr in
     foldl (lam acc. lam fields.
       let ident = nameSym "_ocamlRecordType" in
-      OTmRecordDecl { ident = ident, fieldNames = fields, inexpr = acc }
-    ) expr records
+      OTmRecordDecl { ident = ident, fields = fields, inexpr = acc }
+    ) expr recordDecls
 end
 
 lang OCamlTest = OCamlGenerate + OCamlObjWrap + OCamlRecordDeclGenerate
@@ -722,7 +732,16 @@ utest testInt2float with generate testInt2float using sameSemantics in
 
 -- Records
 let testEmptyRec =
-  bind_ (ulet_ "r" (record_ [("a", int_ 5), ("b", int_ 0), ("c", float_ 1.34)]))
+  bind_ (ulet_ "r" (record_ [
+      ("a", int_ 5),
+      ("b", int_ 0),
+      ("c", float_ 1.34),
+      ("d", record_ [
+        ("x", int_ 1),
+        ("y", float_ 0.),
+        ("z", record_ [("e", float_ 2.718), ("pi", float_ 3.14)])
+      ])
+    ]))
     (recordupdate_ (var_ "r") "b" (int_ 1))
 in
 let r = objWrapRec (generate (declGenerate testEmptyRec)) in

@@ -189,6 +189,7 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
                         + IdentifierPrettyPrint + UnknownTypePrettyPrint
                         + NamedPatPrettyPrint + IntPatPrettyPrint
                         + CharPatPrettyPrint + BoolPatPrettyPrint
+                        + VarTypePrettyPrint
 
   sem pprintConName (env : PprintEnv) =
   | name -> pprintEnvGetStr env (escapeConName name)
@@ -200,6 +201,8 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   sem isAtomic =
   | TmLam _ -> false
   | TmRecLets _ -> false
+  | TmRecord _ -> true
+  | TmRecordUpdate _ -> true
   | OTmMatch _ -> false
   | OTmTuple _ -> true
   | OTmConApp {args = []} -> true
@@ -250,16 +253,20 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   | CChar {val = c} -> show_char c
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
-  | OTmRecordDecl { ident = ident, fieldNames = fieldNames, inexpr = inexpr } ->
-    let toObjTypedField = lam field.
-      join [pprintLabelString field, " : Obj.t"]
+  | OTmRecordDecl { ident = ident, fields = fields, inexpr = inexpr } ->
+    let toTypedField = lam env. lam id. lam ty.
+      match getTypeStringCode indent env ty with (env,str) then
+        (env, join [pprintLabelString id, " : ", str])
+      else never
     in
     match pprintVarName env ident with (env,ident) then
       match pprintCode indent env inexpr with (env,inexpr) then
-        let typedFields = map toObjTypedField fieldNames in
-        (env, join [
-          "type ", ident, " = {", strJoin "; " typedFields, "};;",
-          pprintNewline indent, inexpr])
+        match assocMapAccum {eq=eqString} toTypedField env fields with (env,assoc) then
+          let fields = assocValues {eq=eqString} assoc in
+          (env, join [
+            "type ", ident, " = {", strJoin "; " fields, "};;",
+            pprintNewline indent, inexpr])
+        else never
       else never
     else never
   | OTmConApp {ident = ident, args = []} -> pprintConName env ident
