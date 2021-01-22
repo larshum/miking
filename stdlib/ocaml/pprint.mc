@@ -315,7 +315,7 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
     let ii = pprintIncr i in
     match pprintCode i env t.rec with (env,rec) then
       match pprintCode ii env t.value with (env,value) then
-        (env,join ["{ ", rec, pprintNewline i,
+        (env,join ["{ (", rec, ")", pprintNewline i,
                    "with", pprintNewline i,
                    pprintLabelString t.key, " =", pprintNewline ii, value,
                    " }"])
