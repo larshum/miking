@@ -208,8 +208,16 @@ utest all (lam x. eqi x 1) [1, 1, 1, 2] with false
 utest all (lam x. eqi x 0) [0, 0, 0] with true
 utest all (lam x. eqi x 1) [] with true
 
+let _joinTimer = ref 0.0
+
 -- Join
-let join = lam seqs. foldl concat [] seqs
+let join = lam seqs.
+  let t1 = wallTimeMs () in
+  let res = foldl concat [] seqs in
+  let t2 = wallTimeMs () in
+  let t = divf (subf t2 t1) 1000. in
+  let _ = modref _joinTimer (addf (deref _joinTimer) t) in
+  res
 
 utest join [[1,2],[3,4],[5,6]] with [1,2,3,4,5,6]
 utest join [[1,2],[],[5,6]] with [1,2,5,6]
