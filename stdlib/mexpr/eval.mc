@@ -138,7 +138,7 @@ end
 
 lang RecLetsEval =
   RecLetsAst + VarEval + FixAst + FixEval + RecordEval + LetEval +
-  UnknownTypeAst 
+  UnknownTypeAst
 
   sem eval (ctx : {env : Env}) =
   | TmRecLets t ->
@@ -808,6 +808,113 @@ lang RefOpEval = RefOpAst + IntAst
     else error "not a deref of a reference"
 end
 
+lang BootParserEval = BootParserAst + IntAst + FloatAst + SeqAst +
+                      UnknownTypeAst
+  syn Const =
+  | CBootParserTree { val : PTree }
+  | CBootParserGetTerm2 PTree
+  | CBootParserGetString2 PTree
+  | CBootParserGetInt2 PTree
+  | CBootParserGetFloat2 PTree
+  | CBootParserGetListLength2 PTree
+  | CBootParserGetConst2 PTree
+  | CBootParserGetPat2 PTree
+  | CBootParserGetInfo2 PTree
+
+  sem delta (arg : Expr) =
+  | CBootParserParseMExprString _ ->
+    match arg with TmSeq {tms = tms} then
+      let str = _seqOfCharToString tms in
+      TmConst {val = CBootParserTree {val = bootParserParseMExprString str},
+               info = NoInfo (), ty = TyUnknown ()}
+    else error "argument to bootParserParseMExprString is not a string"
+  | CBootParserGetId _ ->
+    match arg with TmConst ({val = CBootParserTree {val = tree }} & t) then
+      TmConst {val = CInt {val = bootParserGetId tree}}
+    else error "argument to bootParserGetId not a BootParserTree"
+  | CBootParserGetTerm _ ->
+    match arg with TmConst ({val = CBootParserTree {val = tree}} & t) then
+      TmConst {t with val = CBootParserGetTerm2 {val = tree}}
+    else error "first argument of bootParserGetTerm not a BootParserTree"
+  | CBootParserGetTerm2 tree ->
+    match arg with TmConst ({val = CInt {val = n}} & t) then
+      TmConst {t with val = CBootParserTree {val = bootParserGetTerm tree n}}
+    else error "second argument of bootParserGetTerm not an integer"
+  | CBootParserGetString _ ->
+    match arg with TmConst c then
+      match c.val with CBootParserGetString {val = ptree} then
+        TmConst {c with val = CBootParserGetString2 ptree}
+      else error "first argument of bootParserGetString not a BootParserTree"
+    else error "first argument of bootParserGetString not a BootParserTree"
+  | CBootParserGetString2 ptree ->
+    match arg with TmConst ({ val = CInt { val = n } } & c) then
+      TmConst {c with val = CBootParserTree {val = bootParserGetString ptree n}}
+    else error "second argument of bootParserGetString not an integer"
+  | CBootParserGetInt _ ->
+    match arg with TmConst ({val = CBootParserTree {val = tree}} & t) then
+      TmConst {t with val = CBootParserGetInt2 tree}
+    else error "first argument to bootParserGetInt not a BootParserTree"
+  | CBootParserGetInt2 tree ->
+    match arg with TmConst ({val = CInt {val = n}} & t) then
+      TmConst {t with val = CInt {val = bootParserGetInt tree n}}
+    else error "second argument to bootParserGetInt not an integer"
+  | CBootParserGetFloat _ ->
+    match arg with TmConst c then
+      match c.val with CBootParserGetFloat {val = ptree} then
+        TmConst {c with val = CBootParserGetFloat2 ptree}
+      else error "first argument of bootParserGetFloat not a BootParserTree"
+    else error "first argument of bootParserGetFloat not a BootParserTree"
+  | CBootParserGetFloat2 ptree ->
+    match arg with TmConst ({ val = CInt { val = n }} & c) then
+      TmConst {c with val = CBootParserTree {val = bootParserGetFloat ptree n}}
+    else error "second argument of bootParserGetFloat not an integer"
+  | CBootParserGetListLength _ ->
+    match arg with TmConst c then
+      match c.val with CBootParserTree {val = tree} then
+        TmConst {c with val = CBootParserGetListLength2 tree}
+      else error "first argument to bootParserGetListLength not a BootParserTree"
+    else error "first argument to bootParserGetListLength not a BootParserTree"
+  | CBootParserGetListLength2 tree ->
+    match arg with TmConst c then
+      match c.val with CInt {val = n} then
+        TmConst {c with val = CInt {val = bootParserGetListLength tree n}}
+      else error "second argument to bootParserGetListLength not an integer"
+    else error "second argument to bootParserGetListLength not an integer"
+  | CBootParserGetConst _ ->
+    match arg with TmConst c then
+      match c.val with CBootParserTree {val = ptree} then
+        TmConst {c with val = CBootParserGetConst2 ptree}
+      else error "first argument of bootParserGetConst not a BootParserTree"
+    else error "first argument of bootParserGetConst not a BootParserTree"
+  | CBootParserGetConst2 ptree ->
+    match arg with TmConst c then
+      match c.val with CInt {val = n} then
+        TmConst {c with val = CBootParserTree {val = bootParserGetConst ptree n}}
+      else error "second argument to bootParserGetConst not an integer"
+    else error "second argument to bootParserGetConst not an integer"
+  | CBootParserGetPat _ ->
+    match arg with TmConst c then
+      match c.val with CBootParserTree {val = ptree} then
+        TmConst {c with val = CBootParserGetPat2 ptree}
+      else error "first argument of bootParserGetPat not a BootParserTree"
+    else error "first argument of bootParserGetPat not a BootParserTree"
+  | CBootParserGetPat2 ptree ->
+    match arg with TmConst c then
+      match c.val with CInt {val = n} then
+        TmConst {c with val = CBootParserTree {val = bootParserGetPat ptree n}}
+        else error "second argument of bootParserGetPat not an integer"
+    else error "second argument of bootParserGetPat not an integer"
+  | CBootParserGetInfo _ ->
+    match arg with TmConst c then
+      match c with CBootParserTree v then
+        TmConst {c with val = CBootParserGetInfo2 v.tree}
+      else error "first argument of bootParserGetInfo not a BootParserTree"
+    else error "first argument of bootParserGetInfo not a BootParserTree"
+  | CBootParserGetInfo2 tree ->
+    match arg with TmConst ({val = CInt {val = n}} & c)  then
+      TmConst {c with val = CBootParserTree {val = bootParserGetInfo tree n}}
+    else error "second argument of bootParserGetInfo not an integer"
+end
 
 --------------
 -- PATTERNS --
@@ -943,7 +1050,8 @@ lang MExprEval =
   + ArithIntEval + ShiftIntEval + ArithFloatEval + CmpIntEval + CmpFloatEval +
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
-  IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval
+  IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
+  BootParserEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +

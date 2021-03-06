@@ -1049,4 +1049,69 @@ using sameSemantics in
 -- TODO(larshum, 2021-03-06): Add tests for boot parser, map and tensor
 -- intrinsics
 
+-- Boot parser operations
+
+let testBootParserGetId =
+  bootParserGetId_ (bootParserParseMExprString_ (str_ "1")) in
+utest testBootParserGetId with objWrapGenerate testBootParserGetId
+using sameSemantics in
+
+let testBootParserGetTerm =
+  bootParserGetId_ (bootParserGetTerm_
+    (bootParserParseMExprString_ (str_ "negi 1")) (int_ 0)) in
+utest testBootParserGetTerm with objWrapGenerate testBootParserGetTerm
+using sameSemantics in
+
+let testBootParserGetString =
+  get_
+    (bootParserGetString_
+      (bootParserParseMExprString_ (str_ "hello"))
+      (int_ 0))
+    (int_ 0)
+in
+utest testBootParserGetString with objWrapGenerate testBootParserGetString
+using sameSemantics in
+
+let testBootParserGetInt =
+  bootParserGetInt_
+    (bootParserGetConst_
+      (bootParserParseMExprString_ (str_ "123"))
+      (int_ 0))
+    (int_ 0)
+in
+utest testBootParserGetInt with objWrapGenerate testBootParserGetInt
+using sameSemantics in
+
+let testBootParserGetFloat =
+  bootParserGetFloat_
+    (bootParserGetConst_
+      (bootParserParseMExprString_ (str_ "1.0"))
+      (int_ 0))
+    (int_ 0)
+in
+utest testBootParserGetFloat with objWrapGenerate testBootParserGetFloat
+using sameSemantics in
+
+let testBootParserGetListLength =
+  bootParserGetListLength_
+    (bootParserParseMExprString_ (str_ "[1,2,3]")) (int_ 0) in
+utest testBootParserGetListLength with objWrapGenerate testBootParserGetId
+using sameSemantics in
+
+let testBootParserGetPat =
+  bootParserGetId_
+    (bootParserGetPat_
+      (bootParserParseMExprString_ (str_ "match x with 1 then true else false"))
+      (int_ 0))
+in
+utest testBootParserGetPat with objWrapGenerate testBootParserGetPat
+using sameSemantics in
+
+let testBootParserGetId =
+  bootParserGetId_
+    (bootParserGetInfo_ (bootParserParseMExprString_ (str_ "1")) (int_ 0))
+in
+utest testBootParserGetId with objWrapGenerate testBootParserGetId
+using sameSemantics in
+
 ()
