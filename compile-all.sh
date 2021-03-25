@@ -27,7 +27,7 @@ files=(
 # "test/mexpr/reclets.mc"
 # "test/mexpr/comments.mc"
 # "test/mexpr/seq-test.mc"
-# "test/mexpr/bool-test.mc"
+  "test/mexpr/bool-test.mc"
 # "test/mexpr/tuples.mc"
 # "test/mexpr/references.mc"
 # "test/mexpr/string-test.mc"
