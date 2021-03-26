@@ -202,15 +202,18 @@ recursive
             str_ " = ",
             app_ (_printFunc b.1) (var_ b.0)]))
         fields) in
-    lam_ "r" (tyrecord_ fields) (
-      match_
-        (var_ "r")
-        recordPattern
-        (app_ (var_ "join") (seq_ [
-          str_ "{",
-          (appf2_ (var_ "strJoin") (str_ ",") printedFields),
-          str_ "}"]))
-        never_)
+    if eqi (length fields) 0 then
+      lam_ "r" (tyrecord_ fields) (str_ "{}")
+    else
+      lam_ "r" (tyrecord_ fields) (
+        match_
+          (var_ "r")
+          recordPattern
+          (app_ (var_ "join") (seq_ [
+            str_ "{",
+            (appf2_ (var_ "strJoin") (str_ ",") printedFields),
+            str_ "}"]))
+          never_)
   let _printFunc = use MExprAst in
     lam ty.
     match ty with TyInt _ then
@@ -254,13 +257,16 @@ recursive
           appf2_ (_eqFunc b.1) (var_ lhs) (var_ rhs))
         fields) in
     let trueSeq = seq_ (create (length fields) (lam. true_)) in
-    lam_ "a" (tyrecord_ fields)
-      (lam_ "b" (tyrecord_ fields) (
-        match_
-          (tuple_ [var_ "a", var_ "b"])
-          matchPattern
-          (appf3_ (var_ "eqSeq") _eqBool equalSeq trueSeq)
-          never_))
+    if eqi (length fields) 0 then
+      lam_ "a" (tyrecord_ fields) (lam_ "b" (tyrecord_ fields) true_)
+    else
+      lam_ "a" (tyrecord_ fields)
+        (lam_ "b" (tyrecord_ fields) (
+          match_
+            (tuple_ [var_ "a", var_ "b"])
+            matchPattern
+            (appf3_ (var_ "eqSeq") _eqBool equalSeq trueSeq)
+            never_))
   let _eqFunc = use MExprAst in
     lam ty.
     match ty with TyInt _ then
