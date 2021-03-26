@@ -3,6 +3,8 @@
 --
 -- Test symbools
 
+include "bool.mc"
+
 mexpr
 
 -- 'gensym()' generates a new unique symbol.

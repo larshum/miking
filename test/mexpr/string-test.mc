@@ -9,7 +9,8 @@ mexpr
 utest 'a' with 'a' in
 utest '島'with '島' in
 utest "word" with "word" in
-utest "" with [] in
+let emptyStr : String = "" in
+utest emptyStr with [] in
 utest "大衛·布羅曼" with "大衛·布羅曼" in
 
 

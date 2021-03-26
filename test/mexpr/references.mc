@@ -3,6 +3,8 @@
 --
 -- Reference intrinstics
 
+include "seq.mc"
+
 mexpr
 
 let r1 = ref 1 in
