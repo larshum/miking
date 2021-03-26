@@ -3,6 +3,8 @@
 --
 -- Test fixpoint usages
 
+include "prelude.mc"
+
 mexpr
 
 -- Separate fix-point
