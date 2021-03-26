@@ -221,8 +221,10 @@ lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
       if eqi (length tms) 0 then tyunknown_
       else
         let fstty = ty (get tms 0) in
-        if all (lam tm. eqType env.tyEnv fstty (ty tm)) tms then fstty
-        else tyunknown_
+        let f = lam acc. lam tm.
+          compatibleType env.tyEnv acc (ty tm)
+        in
+        optionGetOr tyunknown_ (optionFoldlM f fstty tms)
     in
     TmSeq {{t with tms = tms}
               with ty = tyseq_ elemTy}
