@@ -363,6 +363,14 @@ lang SeqOpEq = SeqOpAst
   | CSplitAt {} -> match lhs with CSplitAt _ then true else false
 end
 
+lang IOEq = IOAst
+  sem eqConst (lhs : Const) =
+  | CPrint {} -> match lhs with CPrint _ then true else false
+  | CDPrint {} -> match lhs with CDPrint _ then true else false
+  | CReadLine {} -> match lhs with CReadLine _ then true else false
+  | CReadBytesAsString {} -> match lhs with CReadBytesAsString _ then true else false
+end
+
 lang TensorOpEq = TensorOpAst
   sem eqConst (lhs : Const) =
   | CTensorCreateInt {} ->
@@ -659,7 +667,7 @@ lang MExprEq =
 
   -- Constants
   + IntEq + ArithEq + FloatEq + ArithFloatEq + BoolEq + CmpIntEq + CmpFloatEq +
-  CharEq + SymbEq + CmpSymbEq + SeqOpEq + TensorOpEq
+  CharEq + SymbEq + CmpSymbEq + SeqOpEq + IOEq + TensorOpEq
 
   -- Patterns
   + NamedPatEq + SeqTotPatEq + SeqEdgePatEq + RecordPatEq + DataPatEq + IntPatEq +
