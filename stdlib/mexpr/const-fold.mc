@@ -17,7 +17,7 @@ lang ConstantFold = MExprEval
   sem evalIfConstant (env : Map Name Expr) =
   | t ->
     if isConstantTerm env t then
-      eval {env = env} t
+      withType (ty t) (eval {env = env} t)
     else smap_Expr_Expr (foldTerm env) t
 end
 
@@ -26,7 +26,10 @@ lang VarConstantFold = ConstantFold + VarAst + ConstAst
   | TmVar t -> mapMem t.ident env
 
   sem foldTerm (env : Map Name Expr) =
-  | (TmVar _) & t -> evalIfConstant env t
+  | TmVar t ->
+    match mapLookup t.ident env with Some expr then
+      expr
+    else TmVar t
 end
 
 lang AppConstantFold = ConstantFold + AppAst + ConstAst + FunTypeAst
@@ -37,7 +40,8 @@ lang AppConstantFold = ConstantFold + AppAst + ConstAst + FunTypeAst
   | (TmApp {ty = ty}) & t ->
     match ty with TyArrow _ then
       smap_Expr_Expr (foldTerm env) t
-    else evalIfConstant env t
+    else
+      evalIfConstant env (smap_Expr_Expr (foldTerm env) t)
 end
 
 lang LamConstantFold = LamAst
@@ -55,7 +59,7 @@ lang LetConstantFold = ConstantFold + LetAst
   sem foldTerm (env : Map Name Expr) =
   | TmLet t ->
     if isConstantTerm env (TmLet t) then
-      eval {env = env} (TmLet t)
+      withType t.ty (eval {env = env} (TmLet t))
     else
       let body = foldTerm env t.body in
       if isConstantTerm env body then
@@ -247,9 +251,9 @@ lang MatchConstantFold = ConstantFold + MatchAst
   sem foldTerm (env : Map Name Expr) =
   | TmMatch t ->
     if isConstantTerm env (TmMatch t) then
-      eval {env = env} (TmMatch t)
+      withType t.ty (eval {env = env} (TmMatch t))
     else if isConstantTerm env t.target then
-      let target = eval {env = env} t.target in
+      let target = withType (ty t.target) (eval {env = env} t.target) in
       match tryMatch {env = env} target t.pat with Some _ then
         evalIfConstant env t.thn
       else
@@ -262,7 +266,7 @@ lang UtestConstantFold = UtestAst
   | TmUtest _ -> false
 
   sem foldTerm (env : Map Name Expr) =
-  | (TmUtest _) & t -> smap_Expr_Expr (foldTerm env) t
+  | TmUtest t -> foldTerm env t.next
 end
 
 lang NeverConstantFold = NeverAst
