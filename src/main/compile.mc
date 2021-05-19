@@ -5,6 +5,7 @@
 include "options.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/builtin.mc"
+include "mexpr/const-fold.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/utesttrans.mc"
@@ -15,7 +16,7 @@ include "ocaml/external-includes.mc"
 
 lang MCoreCompile =
   BootParser +
-  MExprSym + MExprTypeAnnot + MExprUtestTrans +
+  MExprSym + MExprTypeAnnot + MExprUtestTrans + MExprConstantFold +
   OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate +
   OCamlGenerateExternalNaive + OCamlObjWrap
 end
@@ -110,6 +111,12 @@ let compile = lam files. lam options : Options. lam args.
       -- Re-symbolize the MExpr AST and re-annotate it with types
       let ast = symbolizeExpr symEnv ast in
       let ast = typeAnnot ast in
+
+      -- Optimize the MExpr AST unless optimizations are disabled
+      let ast =
+        if options.disableOptimizations then ast
+        else foldConstants ast
+      in
 
       -- Translate the MExpr AST into an OCaml AST and Compile
       match typeLift ast with (env, ast) then
