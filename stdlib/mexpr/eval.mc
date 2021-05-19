@@ -71,13 +71,13 @@ end
 
 lang VarEval = Eval + VarAst + FixAst + AppAst
   sem eval (ctx : {env : Env}) =
-  | TmVar {ident = ident} ->
-    match mapLookup ident ctx.env with Some t then
+  | TmVar t ->
+    match mapLookup t.ident ctx.env with Some t then
       match t with TmApp {lhs = TmFix _} then
         eval ctx t
       else t
     else
-      error (concat "Unknown variable: " (pprintVarString (nameGetStr ident)))
+      infoErrorExit t.info (concat "Unknown variable: " (nameGetStr t.ident))
 end
 
 lang AppEval = Eval + AppAst
@@ -1226,9 +1226,6 @@ lang MExprEval =
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
   IntPatEval + CharPatEval + BoolPatEval + AndPatEval + OrPatEval + NotPatEval
-
-  -- Pretty Printing of Identifiers
-  + MExprIdentifierPrettyPrint
 end
 
 
