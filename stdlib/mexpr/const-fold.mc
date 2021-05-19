@@ -5,17 +5,20 @@ include "mexpr/ast-builder.mc"
 include "mexpr/eq.mc"
 include "mexpr/eval.mc"
 include "mexpr/symbolize.mc"
+include "mexpr/type-annot.mc"
 include "map.mc"
 include "name.mc"
 
 lang ConstantFold = MExprEval
   sem isConstantTerm (env : Map Name Expr) =
 
-  sem evalConstant (env : Map Name Expr) =
+  sem foldTerm (env : Map Name Expr) =
+
+  sem evalIfConstant (env : Map Name Expr) =
   | t ->
     if isConstantTerm env t then
       eval {env = env} t
-    else t
+    else smap_Expr_Expr (foldTerm env) t
 end
 
 lang VarConstantFold = ConstantFold + VarAst + ConstAst
@@ -23,29 +26,23 @@ lang VarConstantFold = ConstantFold + VarAst + ConstAst
   | TmVar t -> mapMem t.ident env
 
   sem foldTerm (env : Map Name Expr) =
-  | (TmVar _) & t -> evalConstant env t
+  | (TmVar _) & t -> evalIfConstant env t
 end
 
-lang AppConstantFold = ConstantFold + AppAst + ConstAst
+lang AppConstantFold = ConstantFold + AppAst + ConstAst + FunTypeAst
   sem isConstantTerm (env : Map Name Expr) =
   | TmApp t -> and (isConstantTerm env t.lhs) (isConstantTerm env t.rhs)
 
-  sem collectArgs =
-  | TmApp {lhs = (TmConst _) & lhs, rhs = rhs} -> [lhs, rhs]
-  | TmApp {lhs = lhs, rhs = rhs} ->
-    snoc (collectArgs lhs) rhs
-
   sem foldTerm (env : Map Name Expr) =
-  | (TmApp _) & t ->
-    if isConstantTerm env t then evalConstant env t
-    else
-      let args = collectArgs t in
-      appSeq_ (head args) (map (foldTerm env) (tail args))
+  | (TmApp {ty = ty}) & t ->
+    match ty with TyArrow _ then
+      smap_Expr_Expr (foldTerm env) t
+    else evalIfConstant env t
 end
 
 lang LamConstantFold = LamAst
   sem isConstantTerm (env : Map Name Expr) =
-  | TmLam t -> false
+  | TmLam _ -> false
 
   sem foldTerm (env : Map Name Expr) =
   | (TmLam _) & t -> smap_Expr_Expr (foldTerm env) t
@@ -53,21 +50,24 @@ end
 
 lang LetConstantFold = ConstantFold + LetAst
   sem isConstantTerm (env : Map Name Expr) =
-  | TmLet t -> false
+  | TmLet t -> and (isConstantTerm env t.body) (isConstantTerm env t.inexpr)
 
   sem foldTerm (env : Map Name Expr) =
   | TmLet t ->
-    let body = foldTerm env t.body in
-    if isConstantTerm env body then
-      foldTerm (mapInsert t.ident body env) t.inexpr
+    if isConstantTerm env (TmLet t) then
+      eval {env = env} (TmLet t)
     else
-      TmLet {{t with body = body}
-                with inexpr = foldTerm env t.inexpr}
+      let body = foldTerm env t.body in
+      if isConstantTerm env body then
+        foldTerm (mapInsert t.ident body env) t.inexpr
+      else
+        TmLet {{t with body = body}
+                  with inexpr = foldTerm env t.inexpr}
 end
 
 lang RecLetsConstantFold = RecLetsAst
   sem isConstantTerm (env : Map Name Expr) =
-  | TmRecLets t -> false
+  | TmRecLets _ -> false
 
   sem foldTerm (env : Map Name Expr) =
   | (TmRecLets _) & t -> smap_Expr_Expr (foldTerm env) t
@@ -208,7 +208,7 @@ lang SeqConstantFold = ConstantFold + SeqAst
   | TmSeq t -> all (isConstantTerm env) t.tms
 
   sem foldTerm (env : Map Name Expr) =
-  | (TmSeq _) & t -> evalConstant env t
+  | (TmSeq _) & t -> smap_Expr_Expr (foldTerm env) t
 end
 
 lang RecordConstantFold = ConstantFold + RecordAst
@@ -217,22 +217,22 @@ lang RecordConstantFold = ConstantFold + RecordAst
   | TmRecordUpdate t -> and (isConstantTerm t.rec) (isConstantTerm t.value)
 
   sem foldTerm (env : Map Name Expr) =
-  | (TmRecord _) & t -> evalConstant env t
-  | (TmRecordUpdate _) & t -> evalConstant env t
+  | (TmRecord _) & t -> smap_Expr_Expr (foldTerm env) t
+  | (TmRecordUpdate _) & t -> smap_Expr_Expr (foldTerm env) t
 end
 
 lang TypeConstantFold = TypeAst
   sem isConstantTerm (env : Map Name Expr) =
-  | TmType t -> false
+  | TmType _ -> false
 
   sem foldTerm (env : Map Name Expr) =
-  | TmType t -> smap_Expr_Expr (foldTerm env) t
+  | (TmType _) & t -> smap_Expr_Expr (foldTerm env) t
 end
 
 lang DataConstantFold = ConstantFold + DataAst
   sem isConstantTerm (env : Map Name Expr) =
-  | TmConDef t -> false
-  | TmConApp t -> false
+  | TmConDef _ -> false
+  | TmConApp _ -> false
 
   sem foldTerm (env : Map Name Expr) =
   | (TmConDef _) & t -> smap_Expr_Expr (foldTerm env) t
@@ -247,18 +247,19 @@ lang MatchConstantFold = ConstantFold + MatchAst
   sem foldTerm (env : Map Name Expr) =
   | TmMatch t ->
     if isConstantTerm env (TmMatch t) then
-      evalConstant env (TmMatch t)
+      eval {env = env} (TmMatch t)
     else if isConstantTerm env t.target then
-      let target = evalConstant env t.target in
-      match tryMatch (mapEmpty nameCmp) target t.pat with Some newEnv then
-        t.thn
-      else t.els
+      let target = eval {env = env} t.target in
+      match tryMatch {env = env} target t.pat with Some _ then
+        evalIfConstant env t.thn
+      else
+        evalIfConstant env t.els
     else smap_Expr_Expr (foldTerm env) (TmMatch t)
 end
 
 lang UtestConstantFold = UtestAst
   sem isConstantTerm (env : Map Name Expr) =
-  | TmUtest t -> false
+  | TmUtest _ -> false
 
   sem foldTerm (env : Map Name Expr) =
   | (TmUtest _) & t -> smap_Expr_Expr (foldTerm env) t
@@ -266,15 +267,15 @@ end
 
 lang NeverConstantFold = NeverAst
   sem isConstantTerm (env : Map Name Expr) =
-  | TmNever t -> true
+  | TmNever _ -> true
 
   sem foldTerm (env : Map Name Expr) =
-  | (TmNever _) & t -> smap_Expr_Expr (foldTerm env) t
+  | TmNever t -> TmNever t
 end
 
 lang ExtConstantFold = ExtAst
   sem isConstantTerm (env : Map Name Expr) =
-  | TmExt t -> false
+  | TmExt _ -> false
 
   sem foldTerm (env : Map Name Expr) =
   | (TmExt _) & t -> smap_Expr_Expr (foldTerm env) t
@@ -287,15 +288,18 @@ lang MExprConstantFold =
   MatchConstantFold + UtestConstantFold + NeverConstantFold + ExtConstantFold
 
   sem foldConstants =
-  | t ->
-    foldTerm (mapEmpty nameCmp) t
+  | t -> foldTerm (mapEmpty nameCmp) t
 end
 
-lang TestLang = MExprConstantFold + MExprEq + MExprSym
+lang TestLang = MExprConstantFold + MExprEq + MExprSym + MExprTypeAnnot
 
 mexpr
 
 use TestLang in
+
+let foldConstants = lam t : Expr.
+  foldConstants (typeAnnot (symbolize t))
+in
 
 utest foldConstants (addi_ (int_ 1) (int_ 2)) with int_ 3 using eqExpr in
 utest foldConstants (slli_ (int_ 3) (int_ 1)) with int_ 6 using eqExpr in
