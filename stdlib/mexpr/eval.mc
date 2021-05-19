@@ -82,7 +82,7 @@ end
 
 lang AppEval = Eval + AppAst
   sem apply (ctx : {env : Env}) (arg : Expr) =
-  | _ -> error "Bad application"
+  | t -> infoErrorExit (infoTm t) "Bad application"
 
   sem eval (ctx : {env : Env}) =
   | TmApp t -> apply ctx (eval ctx t.rhs) (eval ctx t.lhs)
