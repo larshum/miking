@@ -17,7 +17,7 @@ lang ConstantFold = MExprEval
   sem evalIfConstant (env : Map Name Expr) =
   | t ->
     if isConstantTerm env t then
-      withType (ty t) (eval {env = env} t)
+      foldTerm env (withType (ty t) (eval {env = env} t))
     else smap_Expr_Expr (foldTerm env) t
 end
 
@@ -204,7 +204,13 @@ lang ConstConstantFold =
   | TmConst t -> isConstant t.val
 
   sem foldTerm (env : Map Name Expr) =
-  | TmConst t -> TmConst t
+  | TmConst ({val = CInt {val = n}} & t) ->
+    if geqi n 0 then t
+    else withType tyint_ (negi_ (TmConst {t with val = CInt {val = negi n}}))
+  | TmConst ({val = CFloat {val = f}} & t) ->
+    if geqf f 0.0 then t
+    else withType tyfloat_ (negf_ (TmConst {t with val = CFloat {val = negf f}}))
+  | (TmConst _) & t -> t
 end
 
 lang SeqConstantFold = ConstantFold + SeqAst

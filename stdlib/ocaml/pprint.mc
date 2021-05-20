@@ -156,18 +156,14 @@ lang OCamlPrettyPrint =
   | OPatConExt _ -> false
 
   sem getConstStringCode (indent : Int) =
-  | CInt {val = i} ->
-    if lti i 0 then join ["(", int2string i, ")"]
-    else int2string i
+  | CInt {val = i} -> int2string i
   | CAddi _ -> "Int.add"
   | CSubi _ -> "Int.sub"
   | CMuli _ -> "Int.mul"
   | CDivi _ -> "Int.div"
   | CModi _ -> "Int.rem"
   | CNegi _ -> "Int.neg"
-  | CFloat {val = f} ->
-    if ltf f 0.0 then join ["(", float2string f, ")"]
-    else float2string f
+  | CFloat {val = f} -> float2string f
   | CAddf _ -> "Float.add"
   | CSubf _ -> "Float.sub"
   | CMulf _ -> "Float.mul"
