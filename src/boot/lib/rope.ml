@@ -16,7 +16,10 @@ type float_ba = (float, float64_elt) ba
    two recursive tree structures and a length field corresponding to the
    combined length of the two ropes, so that we can look up the length in
    constant time. *)
-type 'a u = Leaf of 'a | Concat of {lhs: 'a u; rhs: 'a u; len: int}
+type 'a u =
+  | Leaf of 'a
+  | Concat of {lhs: 'a u; rhs: 'a u; len: int}
+  | Slice of {r : 'a u; offset: int; len: int}
 
 (* A rope is represented as a reference to its tree data structure. This lets
    us collapse the tree before performing an operation on it, which in turn
@@ -29,6 +32,8 @@ let rec _bigarray_kind (s : ('a, 'b) ba u) : ('a, 'c) kind =
       Array1.kind a
   | Concat {lhs; _} ->
       _bigarray_kind lhs
+  | Slice {r; _} ->
+      _bigarray_kind r
 
 let _uninit_bigarray (k : ('a, 'b) kind) (n : int) : ('a, 'b) ba =
   Array1.create k c_layout n
@@ -60,12 +65,18 @@ let empty_int_bigarray : int_ba t = _empty_bigarray Int
 let empty_float_bigarray : float_ba t = _empty_bigarray Float64
 
 let _length_array (s : 'a array u) : int =
-  match s with Leaf a -> Array.length a | Concat {len; _} -> len
+  match s with
+  | Leaf a -> Array.length a
+  | Concat {len; _} -> len
+  | Slice {len; _} -> len
 
 let length_array (s : 'a array t) : int = _length_array !s
 
 let _length_bigarray (s : ('a, 'b) ba u) : int =
-  match s with Leaf a -> Array1.dim a | Concat {len; _} -> len
+  match s with
+  | Leaf a -> Array1.dim a
+  | Concat {len; _} -> len
+  | Slice {len; _} -> len
 
 let length_bigarray (s : ('a, 'b) ba t) : int = _length_bigarray !s
 
@@ -76,6 +87,8 @@ let rec _get_array (s : 'a array u) (i : int) : 'a =
   | Concat {lhs; rhs; _} ->
       let n = _length_array lhs in
       if i < n then _get_array lhs i else _get_array rhs (i - n)
+  | Slice {r; offset; _} ->
+      _get_array r (i + offset)
 
 let get_array (s : 'a array t) (i : int) : 'a = _get_array !s i
 
@@ -86,26 +99,41 @@ let rec _get_bigarray (s : ('a, 'b) ba u) (i : int) : 'a =
   | Concat {lhs; rhs; _} ->
       let n = _length_bigarray lhs in
       if i < n then _get_bigarray lhs i else _get_bigarray rhs (i - n)
+  | Slice {r; offset; _} ->
+      _get_bigarray r (i + offset)
 
 let get_bigarray (s : ('a, 'b) ba t) (i : int) : 'a = _get_bigarray !s i
 
 let _collapse_array (s : 'a array t) : 'a array =
-  let rec collapse dst s i =
+  let rec collapse dst s offset n i =
     match s with
     | Leaf a ->
-        let n = Array.length a in
-        Array.blit a 0 dst i n ; i + n
+        let copylen = min (Array.length a - offset) (n - i) in
+        Array.blit a offset dst i copylen ; i + copylen
     | Concat {lhs; rhs; _} ->
-        collapse dst rhs (collapse dst lhs i)
+        let llen = _length_array lhs in
+        if offset < llen then
+          if offset + n < llen then
+            collapse dst lhs offset n i
+          else
+            collapse dst rhs 0 n (collapse dst lhs offset n i)
+        else
+          collapse dst rhs (offset - llen) n i
+    | Slice {r; offset=o; len} ->
+        let dst' = Array.make len (_get_array r 0) in
+        let n = min len n in
+        let _ = collapse dst' r (offset + o) n 0 in
+        Array.blit dst' 0 dst i n ; i + n
   in
   match !s with
   | Leaf a ->
       a
-  | Concat {len; _} ->
-      (* NOTE(larshum, 2021-02-12): the implementation guarantees that Concat
-       * nodes are non-empty. *)
+  | _ ->
+      (* NOTE(larshum, 2021-06-21): the implementation guarantees that Concat
+       * and Slice nodes are non-empty. *)
+      let len = length_array s in
       let dst = Array.make len (get_array s 0) in
-      let _ = collapse dst !s 0 in
+      let _ = collapse dst !s 0 len 0 in
       s := Leaf dst ;
       dst
 
@@ -118,6 +146,7 @@ let _collapse_bigarray (s : ('a, 'b) ba t) : ('a, 'b) ba =
         Array1.blit a dst_sub ; i + n
     | Concat {lhs; rhs; _} ->
         collapse dst rhs (collapse dst lhs i)
+    | Slice _ -> failwith ""
   in
   match !s with
   | Leaf a ->
@@ -127,6 +156,7 @@ let _collapse_bigarray (s : ('a, 'b) ba t) : ('a, 'b) ba =
       let _ = collapse dst !s 0 in
       s := Leaf dst ;
       dst
+  | Slice _ -> failwith ""
 
 let concat_array (l : 'a array t) (r : 'a array t) : 'a array t =
   let ln = length_array l in
@@ -152,6 +182,8 @@ let set_array (s : 'a array t) (idx : int) (v : 'a) : 'a array t =
         let n = _length_array lhs in
         if i < n then Concat {lhs= helper lhs i; rhs; len}
         else Concat {lhs; rhs= helper rhs (i - n); len}
+    | Slice {r; offset; _} ->
+        helper r (i + offset)
   in
   ref (helper !s idx)
 
@@ -167,6 +199,8 @@ let set_bigarray (s : ('a, 'b) ba t) (idx : int) (v : 'a) : ('a, 'b) ba t =
         let n = _length_bigarray lhs in
         if i < n then Concat {lhs= helper lhs i; rhs; len}
         else Concat {lhs; rhs= helper rhs (i - n); len}
+    | Slice {r; offset; _} ->
+        helper r (i + offset)
   in
   ref (helper !s idx)
 
@@ -199,25 +233,19 @@ let split_at_array (s : 'a array t) (idx : int) : 'a array t * 'a array t =
   if idx = 0 then (empty_array, s)
   else if idx = n then (s, empty_array)
   else
-    let fst = get_array s 0 in
-    let lhs = Array.make idx fst in
-    let rhs = Array.make (n - idx) fst in
-    let rec fill s i =
-      match s with
-      | Leaf a ->
-          let n = Array.length a in
-          ( if i + n < idx then Array.blit a 0 lhs i n
-          else if not (i < idx) then Array.blit a 0 rhs (i - idx) n
-          else
-            let lhs_copy_length = idx - i in
-            Array.blit a 0 lhs i lhs_copy_length ;
-            Array.blit a lhs_copy_length rhs 0 (n - lhs_copy_length) ) ;
-          i + n
-      | Concat {lhs; rhs; _} ->
-          fill rhs (fill lhs i)
-    in
-    let _ = fill !s 0 in
-    (ref (Leaf lhs), ref (Leaf rhs))
+    match !s with
+    | Slice {r; offset; len} ->
+        let rlen = len - idx in
+        let lhs = ref (Slice {r; offset; len= idx}) in
+        let rhs =
+          if rlen > 0 then ref (Slice {r; offset= offset + idx; len= rlen})
+          else empty_array
+        in
+        (lhs, rhs)
+    | _ ->
+        let lhs = ref (Slice {r= !s; offset= 0; len= idx}) in
+        let rhs = ref (Slice {r= !s; offset= idx; len= n - idx}) in
+        (lhs, rhs)
 
 let split_at_bigarray (s : ('a, 'b) ba t) (idx : int) :
     ('a, 'b) ba t * ('a, 'b) ba t =
@@ -226,89 +254,32 @@ let split_at_bigarray (s : ('a, 'b) ba t) (idx : int) :
   if idx = 0 then (_empty_bigarray k, s)
   else if idx = n then (s, _empty_bigarray k)
   else
-    let lhs = _uninit_bigarray k idx in
-    let rhs = _uninit_bigarray k (n - idx) in
-    let rec fill s i =
-      match s with
-      | Leaf a ->
-          let n = Array1.dim a in
-          ( if i + n < idx then
-            let dst = Array1.sub lhs i n in
-            Array1.blit a dst
-          else if not (i < idx) then
-            let dst = Array1.sub rhs (i - idx) n in
-            Array1.blit a dst
-          else
-            let lhs_copy_length = idx - i in
-            let lsrc = Array1.sub a 0 lhs_copy_length in
-            let rsrc = Array1.sub a lhs_copy_length (n - lhs_copy_length) in
-            let ldst = Array1.sub lhs i lhs_copy_length in
-            let rdst = Array1.sub rhs 0 (n - lhs_copy_length) in
-            Array1.blit lsrc ldst ; Array1.blit rsrc rdst ) ;
-          i + n
-      | Concat {lhs; rhs; _} ->
-          fill rhs (fill lhs i)
-    in
-    let _ = fill !s 0 in
-    (ref (Leaf lhs), ref (Leaf rhs))
+    let lhs = Slice {r= !s; offset= 0; len= idx} in
+    let rhs = Slice {r= !s; offset= idx; len= n - idx} in
+    (ref lhs, ref rhs)
 
 let sub_array (s : 'a array t) (off : int) (cnt : int) : 'a array t =
-  let n = length_array s in
+  let n = min (length_array s - off) cnt in
   if n = 0 then empty_array
   else
-    let cnt = min (n - off) cnt in
-    let dst = Array.make cnt (get_array s 0) in
-    let rec fill s i =
-      match s with
-      | Leaf a ->
-          let n = Array.length a in
-          let src_offset = max (off - i) 0 in
-          let dst_offset = max (i - off) 0 in
-          let copy_len = min (n - src_offset) (cnt - dst_offset) in
-          Array.blit a src_offset dst dst_offset copy_len ;
-          i + n
-      | Concat {lhs; rhs; _} ->
-          let n = _length_array lhs in
-          if i + n < off then fill rhs (i + n)
-          else if off + cnt < i + n then fill lhs i
-          else fill rhs (fill lhs i)
-    in
-    let _ = fill !s 0 in
-    ref (Leaf dst)
+    match !s with
+    | Slice {r; offset; len} ->
+        let n = min len n in
+        if n = 0 then empty_array
+        else ref (Slice {r; offset= offset + off; len= n})
+    | _ ->
+        ref (Slice {r= !s; offset= off; len= n})
 
 let sub_bigarray (s : ('a, 'b) ba t) (off : int) (cnt : int) : ('a, 'b) ba t =
   let k = _bigarray_kind !s in
-  let n = length_bigarray s in
-  let cnt = min (n - off) cnt in
-  let dst = _uninit_bigarray k cnt in
-  let rec fill s i =
-    match s with
-    | Leaf a ->
-        let n = Array1.dim a in
-        let src_offset = max (off - i) 0 in
-        let dst_offset = max (i - off) 0 in
-        let copy_len = min (n - src_offset) (cnt - dst_offset) in
-        let src_sub = Array1.sub a src_offset copy_len in
-        let dst_sub = Array1.sub dst dst_offset copy_len in
-        Array1.blit src_sub dst_sub ;
-        i + n
-    | Concat {lhs; rhs; _} ->
-        let n = _length_bigarray lhs in
-        if i + n < off then fill rhs (i + n)
-        else if off + cnt < i + n then fill lhs i
-        else fill rhs (fill lhs i)
-  in
-  let _ = fill !s 0 in
-  ref (Leaf dst)
+  let n = min (length_bigarray s - off) cnt in
+  if n = 0 then _empty_bigarray k
+  else
+    ref (Slice {r = !s; offset = off; len = n})
 
 let iter_array (f : 'a -> unit) (s : 'a array t) : unit =
-  let rec iter = function
-    | Leaf a ->
-        Array.iter f a
-    | Concat {lhs; rhs; _} ->
-        iter lhs ; iter rhs
-  in
-  iter !s
+  let a = _collapse_array s in
+  Array.iter f a
 
 let iter_bigarray (f : 'a -> unit) (s : ('a, 'b) ba t) : unit =
   let rec iter = function
@@ -319,19 +290,13 @@ let iter_bigarray (f : 'a -> unit) (s : ('a, 'b) ba t) : unit =
         done
     | Concat {lhs; rhs; _} ->
         iter lhs ; iter rhs
+    | Slice _ -> failwith ""
   in
   iter !s
 
 let iteri_array (f : int -> 'a -> unit) (s : 'a array t) : unit =
-  let rec iteri off = function
-    | Leaf a ->
-        Array.iteri (fun i e -> f (i + off) e) a ;
-        Array.length a
-    | Concat {lhs; rhs; _} ->
-        let n = iteri off lhs in
-        iteri (off + n) rhs
-  in
-  iteri 0 !s |> ignore
+  let a = _collapse_array s in
+  Array.iteri f a
 
 let iteri_bigarray (f : int -> 'a -> unit) (s : ('a, 'b) ba t) : unit =
   let rec iteri off = function
@@ -344,6 +309,7 @@ let iteri_bigarray (f : int -> 'a -> unit) (s : ('a, 'b) ba t) : unit =
     | Concat {lhs; rhs; _} ->
         let n = iteri off lhs in
         iteri (off + n) rhs
+    | Slice _ -> failwith ""
   in
   iteri 0 !s |> ignore
 
