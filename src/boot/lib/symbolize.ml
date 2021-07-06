@@ -78,6 +78,8 @@ let rec symbolize_type env ty =
       TyVar (fi, x, s)
   | TyApp (fi, ty1, ty2) ->
       TyApp (fi, symbolize_type env ty1, symbolize_type env ty2)
+  | TyAssociative (fi, ty) ->
+      TyAssociative (fi, symbolize_type env ty)
 
 (* Add symbol associations between lambdas, patterns, and variables. The function also
    constructs TmConApp terms from the combination of variables and function applications.  *)

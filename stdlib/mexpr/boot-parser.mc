@@ -184,6 +184,9 @@ lang BootParser = MExprAst + ConstTransformer
   | 211 /-TyTensor-/ ->
     TyTensor {info = ginfo t 0,
               ty = gtype t 0}
+  | 212 /- TyAssociative -/ ->
+    TyAssociative {info = ginfo t 0,
+                   ty = gtype t 0}
 
   -- Get constant help function
   sem gconst(t:Unknown) =

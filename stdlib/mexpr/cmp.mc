@@ -96,6 +96,11 @@ lang AppTypeCmp = Cmp + AppTypeAst
     else lhsDiff
 end
 
+lang AssociativeTypeCmp = Cmp + AssociativeTypeAst
+  sem cmpTypeH =
+  | (TyAssociative t1, TyAssociative t2) -> cmpType t1.ty t2.ty
+end
+
 --------------------
 -- MEXPR FRAGMENT --
 --------------------
@@ -123,6 +128,7 @@ lang MExprCmpTypeIndex = MExprAst
   | TyVar _ -> 9
   | TyApp _ -> 10
   | TyTensor _ -> 11
+  | TyAssociative _ -> 12
 
 end
 

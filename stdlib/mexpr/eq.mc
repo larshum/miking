@@ -651,6 +651,17 @@ lang AppTypeEq = Eq + AppTypeAst
     else false
 end
 
+lang AssociativeTypeEq = Eq + AssociativeTypeAst
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
+  | TyAssociative r ->
+    match unwrapType typeEnv lhs with Some ty then
+      match ty with TyAssociative l then
+        eqType typeEnv l.ty r.ty
+      else
+        eqType typeEnv ty r.ty
+    else false
+end
+
 -----------------------------
 -- MEXPR ALPHA EQUIVALENCE --
 -----------------------------

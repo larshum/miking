@@ -86,6 +86,10 @@ let ntyvar_ = use VarTypeAst in
 let tyvar_ = lam s.
   ntyvar_ (nameNoSym s)
 
+let tyassociative_ = use AssociativeTypeAst in
+  lam ty.
+  TyAssociative {ty = ty, info = NoInfo ()}
+
 -- Tensor OP types
 let tytensorcreateint_ =
   tyarrows_ [ tyseq_ tyint_

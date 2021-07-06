@@ -343,6 +343,8 @@ and ty =
   | TyVar of info * ustring * Symb.t
   (* Type application, currently only used for documenation purposes *)
   | TyApp of info * ty * ty
+  (* Associative type wrapper *)
+  | TyAssociative of info * ty
 
 (* Kind of identifier *)
 and ident =
@@ -488,7 +490,8 @@ let ty_info = function
   | TyRecord (fi, _, _)
   | TyVariant (fi, _)
   | TyVar (fi, _, _)
-  | TyApp (fi, _, _) ->
+  | TyApp (fi, _, _)
+  | TyAssociative (fi, _) ->
       fi
 
 (* Checks if a constant _may_ have a side effect. It is conservative

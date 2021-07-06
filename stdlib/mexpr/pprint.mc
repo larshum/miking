@@ -1088,6 +1088,14 @@ lang AppTypePrettyPrint = AppTypeAst
     else never
 end
 
+lang AssociativeTypePrettyPrint = AssociativeTypeAst
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
+  | TyAssociative t ->
+    match getTypeStringCode indent env t.ty with (env, ty) then
+      (env, join ["Associative [", ty, "]"])
+    else never
+end
+
 
 ---------------------------
 -- MEXPR PPRINT FRAGMENT --
@@ -1122,7 +1130,8 @@ lang MExprPrettyPrint =
   UnknownTypePrettyPrint + BoolTypePrettyPrint + IntTypePrettyPrint +
   FloatTypePrettyPrint + CharTypePrettyPrint + FunTypePrettyPrint +
   SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
-  VarTypePrettyPrint + AppTypePrettyPrint + TensorTypePrettyPrint
+  VarTypePrettyPrint + AppTypePrettyPrint + TensorTypePrettyPrint +
+  AssociativeTypePrettyPrint
 
   -- Identifiers
   + MExprIdentifierPrettyPrint

@@ -79,6 +79,7 @@
 %token <unit Ast.tokendata> TCHAR
 %token <unit Ast.tokendata> TSTRING
 %token <unit Ast.tokendata> TTENSOR
+%token <unit Ast.tokendata> TASSOCIATIVE
 
 %token <unit Ast.tokendata> EQ            /* "="   */
 %token <unit Ast.tokendata> ARROW         /* "->"  */
@@ -547,6 +548,8 @@ ty_atom:
     { TyChar $1.i }
   | TSTRING
     { TySeq($1.i,TyChar $1.i) }
+  | TASSOCIATIVE LSQUARE ty RSQUARE
+    { TyAssociative(mkinfo $1.i $4.i, $3) }
   | type_ident
     { TyVar($1.i,$1.v,Symb.Helpers.nosym) }
 

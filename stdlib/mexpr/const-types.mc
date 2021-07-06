@@ -23,9 +23,9 @@ end
 
 lang ArithIntTypeAst = ArithIntAst
   sem tyConst =
-  | CAddi _ -> tyarrows_ [tyint_, tyint_, tyint_]
+  | CAddi _ -> tyassociative_ (tyarrows_ [tyint_, tyint_, tyint_])
   | CSubi _ -> tyarrows_ [tyint_, tyint_, tyint_]
-  | CMuli _ -> tyarrows_ [tyint_, tyint_, tyint_]
+  | CMuli _ -> tyassociative_ (tyarrows_ [tyint_, tyint_, tyint_])
   | CDivi _ -> tyarrows_ [tyint_, tyint_, tyint_]
   | CNegi _ -> tyarrow_ tyint_ tyint_
   | CModi _ -> tyarrows_ [tyint_, tyint_, tyint_]
@@ -111,8 +111,9 @@ lang SeqOpTypeAst = SeqOpAst
   | CGet _ -> tyarrows_ [tygenericseq_ "a", tyint_, tygeneric_ "a"]
   | CCons _ -> tyarrows_ [tygeneric_ "a", tygenericseq_ "a", tygenericseq_ "a"]
   | CSnoc _ -> tyarrows_ [tygenericseq_ "a", tygeneric_ "a", tygenericseq_ "a"]
-  | CConcat _ -> tyarrows_ [tygenericseq_ "a", tygenericseq_ "a",
-                            tygenericseq_ "a"]
+  | CConcat _ -> tyassociative_ (tyarrows_ [tygenericseq_ "a",
+                                            tygenericseq_ "a",
+                                            tygenericseq_ "a"])
   | CLength _ -> tyarrow_ (tygenericseq_ "a") tyint_
   | CReverse _ -> tyarrow_ (tygenericseq_ "a") (tygenericseq_ "a")
   | CHead _ -> tyarrow_ (tygenericseq_ "a") (tygeneric_ "a")

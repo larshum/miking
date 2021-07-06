@@ -488,6 +488,8 @@ let typeHasDefaultEquality = use MExprAst in
         else match mapLookup t.ident env.aliases with Some ty then
           work visited ty
         else false
+    else match ty with TyAssociative t then
+      work visited t.ty
     else false
   in
   work (mapEmpty nameCmp) ty

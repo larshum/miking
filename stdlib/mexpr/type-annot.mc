@@ -196,6 +196,23 @@ lang VariantCompatibleType = CompatibleType + VariantTypeAst
 
 end
 
+lang AssociativeCompatibleType = CompatibleType + AssociativeTypeAst +
+                                 UnknownTypeAst
+  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  | (TyAssociative t1, TyAssociative t2) ->
+    match compatibleType tyEnv t1.ty t2.ty with Some ty then
+      Some (TyAssociative {t1 with ty = ty})
+    else None ()
+  | (TyAssociative t1, t2 & !(TyUnknown _)) ->
+    match compatibleType tyEnv t1.ty t2 with Some ty then
+      Some (TyAssociative {t1 with ty = ty})
+    else None ()
+  | (t1 & !(TyAssociative _ | TyUnknown _), TyAssociative t2) ->
+    match compatibleType tyEnv t1 t2.ty with Some ty then
+      Some (TyAssociative {t2 with ty = ty})
+    else None ()
+end
+
 
 -------------------
 -- TYPE ANNOTATE --
@@ -233,13 +250,18 @@ lang VarTypeAnnot = TypeAnnot + VarAst
 
 end
 
-lang AppTypeAnnot = TypeAnnot + AppAst + FunTypeAst + MExprEq
+lang AppTypeAnnot = TypeAnnot + AppAst + FunTypeAst + AssociativeTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmApp t ->
     let lhs = typeAnnotExpr env t.lhs in
     let rhs = typeAnnotExpr env t.rhs in
     let ty =
-      match (ty lhs, ty rhs) with (TyArrow {from = from, to = to}, ty) then
+      let lty =
+        match ty lhs with TyAssociative t then
+          t.ty
+        else ty lhs
+      in
+      match (lty, ty rhs) with (TyArrow {from = from, to = to}, ty) then
         match compatibleType env.tyEnv from ty with Some _ then
           to
         else (ityunknown_ t.info)
@@ -646,7 +668,7 @@ lang MExprTypeAnnot =
   IntCompatibleType + FloatCompatibleType + CharCompatibleType +
   FunCompatibleType + SeqCompatibleType + TensorCompatibleType +
   RecordCompatibleType + VariantCompatibleType + AppCompatibleType +
-  PropagateArrowLambda + PropagateLetType +
+  PropagateArrowLambda + PropagateLetType + AssociativeCompatibleType +
 
   -- Terms
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +

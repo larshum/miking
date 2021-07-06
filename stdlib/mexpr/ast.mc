@@ -1212,6 +1212,24 @@ lang AppTypeAst = Ast
   | TyApp r -> r.info
 end
 
+lang AssociativeTypeAst = Ast
+  syn Type =
+  | TyAssociative {ty   : Type,
+                   info : Info}
+
+  sem tyWithInfo (info : Info) =
+  | TyAssociative t -> TyAssociative {t with info = info}
+
+  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TyAssociative t ->
+    match f acc t.ty with (acc, ty) then
+      (acc, TyAssociative {t with ty = ty})
+    else never
+
+  sem infoTy =
+  | TyAssociative r -> r.info
+end
+
 ------------------------
 -- MEXPR AST FRAGMENT --
 ------------------------
@@ -1238,3 +1256,6 @@ lang MExprAst =
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + VarTypeAst +
   AppTypeAst + TensorTypeAst
+
+  -- Just for testing atm
+  + AssociativeTypeAst

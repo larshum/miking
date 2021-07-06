@@ -190,6 +190,8 @@ let rec ustring_of_ty = function
       ustring_of_type x s
   | TyApp (_, ty1, ty2) ->
       us "(" ^. ustring_of_ty ty1 ^. us " " ^. ustring_of_ty ty2 ^. us ")"
+  | TyAssociative (_, ty) ->
+      us "Associative [" ^. ustring_of_ty ty ^. us "]"
 
 (** Simple enum used in the concat function in ustring_of_tm *)
 type sep = Space | Comma
