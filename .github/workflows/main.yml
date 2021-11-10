@@ -1,9 +1,9 @@
 name: Miking CI
 
-on:
-  pull_request:
-    branches: [master, develop]
-    types: [opened, reopened, synchronize]
+on: push
+  #  pull_request:
+  #    branches: [master, develop]
+  #    types: [opened, reopened, synchronize]
 
 jobs:
   build-and-test-linux:
