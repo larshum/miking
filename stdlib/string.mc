@@ -7,7 +7,7 @@ let emptyStr : String = ""
 
 let escapeString = lam s. join (map escapeChar s)
 
-utest escapeString "e" with ""
+utest escapeString "e" with "e"
 utest escapeString "0" with "0"
 utest escapeString "\n" with "\\n"
 utest escapeString "\r" with "\\r"
