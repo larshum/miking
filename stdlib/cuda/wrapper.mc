@@ -129,7 +129,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
       ident = nameSym "cuda_tensor_tmp",
       data = _generateCudaDataRepresentation env t.ty,
       elemTy = getCudaType env.targetEnv t.ty,
-      elemOcamlTy = getOcamlTensorType t.ty,
+      elemOcamlTy = getOcamlTensorType env.targetEnv t.ty,
       ty = getCudaType env.targetEnv ty}
   | ty & (TyRecord t) ->
     match env.targetEnv with CudaTargetEnv cenv in
