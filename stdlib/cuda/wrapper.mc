@@ -524,7 +524,9 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
         lhs = _accessMember t.ty dst _tensorDataKey,
         rhs = CEVar {id = tempId}}} in
       concat tensorAllocStmts
-        [ emptyPtrDeclStmt, allocManagedStmt, tensorArrPtrStmt, counterDeclStmt, copyDataStmt, setTensorDataStmt ]
+        [ emptyPtrDeclStmt, allocManagedStmt,
+          tensorArrPtrStmt, counterDeclStmt, iterLimitDeclStmt,
+          copyDataStmt, setTensorDataStmt ]
   | CudaRecordRepr t ->
     let dst = CEVar {id = dstIdent} in
     let generateMarshallingField : [CStmt] -> (CDataRepr, Int) -> [CStmt] =
