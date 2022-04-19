@@ -478,7 +478,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
         ty = CTyPtr { ty = t.elemOcamlTy }, id = Some tensorArrId,
         init = Some (CIExpr {expr = CECast {
           ty = CTyPtr { ty = t.elemOcamlTy },
-          expr = CEApp {fun = _getIdentExn "Caml_ba_data_val", args = [src]}}})
+          rhs = CEApp {fun = _getIdentExn "Caml_ba_data_val", args = [src]}}})
       } in
       let counterId = nameSym "i" in
       let counterDeclStmt = CSDef {
@@ -497,9 +497,9 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
                            rhs = CEVar {id = counterId}},
             rhs = CECast {
                     ty = t.elemTy,
-                    expr = CEBinOp {op = COSubScript (),
-                                    lhs = CEVar {id = tensorArrId},
-                                    rhs = CEVar {id = counterId}}}
+                    rhs = CEBinOp {op = COSubScript (),
+                                   lhs = CEVar {id = tensorArrId},
+                                   rhs = CEVar {id = counterId}}}
           }},
           CSExpr {expr = CEBinOp {
             op = COAssign (),
