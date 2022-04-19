@@ -475,7 +475,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
       --    CEVar {id = _cudaMemcpyHostToDevice}]}} in
       let tensorArrId = nameSym "t_ocaml" in
       let tensorArrPtrStmt = CSDef {
-        ty = CTyPtr { ty = t.elemOcamlTy }, id = tensorArrId,
+        ty = CTyPtr { ty = t.elemOcamlTy }, id = Some tensorArrId,
         init = Some (CIExpr {expr = CEApp {fun = _getIdentExn "Caml_ba_data_val", args = [src]}})
       } in
       let counterId = nameSym "i" in
