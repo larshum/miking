@@ -485,10 +485,19 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
         ty = CTyInt64 (), id = Some counterId,
         init = Some (CIExpr {expr = CEInt {i = 0}})
       } in
+      let iterLimitId = nameSym "elems" in
+      let iterLimitDeclStmt = CSDef {
+        ty = CTyInt64 (), id = Some iterLimitId,
+        init = Some (CIExpr {expr = CEBinOp {
+          op = CODiv {},
+          lhs = CEVar {id = n},
+          rhs = CESizeOfType {ty = t.elemTy}
+        }})
+      } in
       let copyDataStmt = CSWhile {
         cond = CEBinOp {op = COLt (),
                         lhs = CEVar {id = counterId},
-                        rhs = CEVar {id = n}},
+                        rhs = CEVar {id = iterLimitId}},
         body = [
           CSExpr {expr = CEBinOp {
             op = COAssign (),
