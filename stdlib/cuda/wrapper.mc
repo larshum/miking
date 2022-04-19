@@ -812,21 +812,66 @@ lang CudaDeallocWrapper = CudaCWrapperBase
         op = COSubScript (),
         lhs = CEVar {id = ptrId},
         rhs = tensorIdExpr} in
-    -- TO BE FIXED!!!
-    let copyBackTensorDataStmt = CSExpr {expr = CEApp {
-      fun = _cudaMemcpy,
-      args = [
-        CEApp {fun = _getIdentExn "Caml_ba_data_val", args = [ocamlArg]},
-        _accessMember t.ty arg _tensorDataKey,
-        _accessMember t.ty arg _tensorSizeKey,
-        CEVar {id = _cudaMemcpyDeviceToHost}]}} in
+    --let copyBackTensorDataStmt = CSExpr {expr = CEApp {
+    --  fun = _cudaMemcpy,
+    --  args = [
+    --    CEApp {fun = _getIdentExn "Caml_ba_data_val", args = [ocamlArg]},
+    --    _accessMember t.ty arg _tensorDataKey,
+    --    _accessMember t.ty arg _tensorSizeKey,
+    --    CEVar {id = _cudaMemcpyDeviceToHost}]}} in
+    let tensorArrId = nameSym "t_ocaml" in
+    let tensorArrPtrStmt = CSDef {
+      ty = CTyPtr { ty = t.elemOcamlTy }, id = Some tensorArrId,
+      init = Some (CIExpr {expr = CECast {
+        ty = CTyPtr { ty = t.elemOcamlTy },
+        rhs = CEApp {fun = _getIdentExn "Caml_ba_data_val", args = [ocamlArg]}}})
+    } in
+    let counterId = nameSym "i" in
+    let counterDeclStmt = CSDef {
+      ty = CTyInt64 (), id = Some counterId,
+      init = Some (CIExpr {expr = CEInt {i = 0}})
+    } in
+    let iterLimitId = nameSym "elems" in
+    let iterLimitDeclStmt = CSDef {
+      ty = CTyInt64 (), id = Some iterLimitId,
+      init = Some (CIExpr {expr = CEBinOp {
+        op = CODiv {},
+        lhs = _accessMember t.ty arg _tensorSizeKey,
+        rhs = CESizeOfType {ty = t.elemTy}
+      }})
+    } in
+    let copyBackTensorDataStmt = CSWhile {
+      cond = CEBinOp {op = COLt (),
+                      lhs = CEVar {id = counterId},
+                      rhs = CEVar {id = iterLimitId}},
+      body = [
+        CSExpr {expr = CEBinOp {
+          op = COAssign (),
+          lhs = CEBinOp {op = COSubScript (),
+                         lhs = CEVar {id = tensorArrId},
+                         rhs = CEVar {id = counterId}},
+          rhs = CECast {
+                  ty = t.elemTy,
+                  rhs = CEBinOp {op = COSubScript (),
+                                 lhs = _accessMember t.ty arg _tensorDataKey,
+                                 rhs = CEVar {id = counterId}}}
+        }},
+        CSExpr {expr = CEBinOp {
+          op = COAssign (),
+          lhs = CEVar {id = counterId},
+          rhs = CEBinOp {op = COAdd (),
+                         lhs = CEVar {id = counterId},
+                         rhs = CEInt {i = 1}}
+        }}
+      ]
+    } in
     let updatedCondExpr = CEBinOp {
       op = CONeq (),
       lhs = accessIdx _tensorStateData,
       rhs = CEVar {id = _tensorStateOk}} in
     let copyIfUpdatedStmt = CSIf {
       cond = updatedCondExpr,
-      thn = [copyBackTensorDataStmt],
+      thn = [tensorArrPtrStmt, counterDeclStmt, iterLimitDeclStmt, copyBackTensorDataStmt],
       els = []} in
     let freeDataStmt = CSExpr {expr = CEApp {
       fun = _cudaFree,
