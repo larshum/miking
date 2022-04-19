@@ -480,7 +480,7 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
       } in
       let counterId = nameSym "i" in
       let counterDeclStmt = CSDef {
-        ty = CTyInt64 (), id = counterId,
+        ty = CTyInt64 (), id = Some counterId,
         init = Some (CIExpr {expr = CEInt {i = 0}})
       } in
       let copyDataStmt = CSWhile {
