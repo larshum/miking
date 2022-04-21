@@ -105,7 +105,7 @@ lang CudaLoopKernelIntrinsic = CudaIntrinsic + CudaPMExprAst
       fun = _cudaDeviceSynchronize, args = []}} in
 
     let stmts =
-      [ iterInitStmt, tpbStmt, nblocksStmt, kernelLaunchStmt, errorCheckStmt,
+      [ iterInitStmt, tpbStmt, nblocksStmt, kernelLaunchStmt, errorCheckStmt
       , deviceSynchronizeStmt, errorCheckStmt ] in
     (kernelTop, CSComp {stmts = stmts})
 end
