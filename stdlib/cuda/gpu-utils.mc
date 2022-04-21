@@ -12,6 +12,6 @@ void gpu_utils_checkCudaErr(const char *file, int line)
     }
 }
 
-#define GPU_UTILS_CHECK_CUDA_ERROR() \
+#define GPU_UTILS_CHECK_CUDA_ERROR() \\
         gpu_utils_checkCudaErr(__FILE__, __LINE__)
 "
