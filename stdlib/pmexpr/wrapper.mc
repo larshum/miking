@@ -22,7 +22,7 @@ let _genCWrapperNames = lam.
     "cudaFree", "cudaMemcpy", "cudaDeviceSynchronize",
     "cudaMemcpyHostToDevice", "cudaMemcpyDeviceToHost", "Caml_ba_array_val",
     "Caml_ba_data_val", "caml_ba_alloc", "CAML_BA_CAML_INT", "CAML_BA_FLOAT64",
-    "CAML_BA_C_LAYOUT", "GPU_UTILS_CHECK_CUDA_ERROR"]
+    "CAML_BA_C_LAYOUT"]
   in
   mapFromSeq
     cmpString
