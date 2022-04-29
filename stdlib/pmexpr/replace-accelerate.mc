@@ -59,7 +59,7 @@ lang PMExprReplaceAccelerate =
             -- match.
             let str = pprintLabelString (sidToString sid) in
             (acc, (str, ty)))
-          acc (tyRecordOrderedFields ty)
+          acc (tyRecordOrderedLabels ty)
       with (acc, ocamlTypedFields) in
       -- NOTE(larshum, 2022-03-17): Add a type definition for the OCaml record
       -- and use it as the target for conversion.
