@@ -59,7 +59,7 @@ lang PMExprReplaceAccelerate =
             -- match.
             let str = sidToString sid in
             let asStr = pprintLabelString str in
-            (acc, {label = str, asLabel = asStr, ty = ty}))
+            (acc, {label = asStr, asLabel = str, ty = ty}))
           acc (tyRecordOrderedLabels ty)
       with (acc, ocamlTypedFields) in
       -- NOTE(larshum, 2022-03-17): Add a type definition for the OCaml record
