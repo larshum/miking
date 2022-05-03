@@ -57,8 +57,9 @@ lang PMExprReplaceAccelerate =
             -- NOTE(larshum, 2022-03-17): We explicitly use the label escaping
             -- of the OCaml pretty-printer to ensure the labels of the fields
             -- match.
-            let str = pprintLabelString (sidToString sid) in
-            (acc, {label = str, asLabel = str, ty = ty}))
+            let str = sidToString sid in
+            let asStr = pprintLabelString str in
+            (acc, {label = str, asLabel = asStr, ty = ty}))
           acc (tyRecordOrderedLabels ty)
       with (acc, ocamlTypedFields) in
       -- NOTE(larshum, 2022-03-17): Add a type definition for the OCaml record
