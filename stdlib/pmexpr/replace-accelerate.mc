@@ -58,14 +58,14 @@ lang PMExprReplaceAccelerate =
             -- of the OCaml pretty-printer to ensure the labels of the fields
             -- match.
             let str = pprintLabelString (sidToString sid) in
-            (acc, (str, ty)))
+            (acc, {label = str, asLabel = str, ty = ty}))
           acc (tyRecordOrderedLabels ty)
       with (acc, ocamlTypedFields) in
       -- NOTE(larshum, 2022-03-17): Add a type definition for the OCaml record
       -- and use it as the target for conversion.
       let recTyId = nameSym "record" in
       let tyident = OTyVar {info = info, ident = recTyId} in
-      let recTy = OTyRecord {
+      let recTy = OTyRecordExt {
         info = info, fields = ocamlTypedFields, tyident = tyident} in
       let recTyDecl = OTopTypeDecl {ident = recTyId, ty = ty} in
       (snoc acc recTyDecl, recTy)
