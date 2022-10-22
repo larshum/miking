@@ -7,6 +7,7 @@ include "ext/dist-ext.ext-ocaml.mc"
 include "ext/file-ext.ext-ocaml.mc"
 include "ext/toml-ext.ext-ocaml.mc"
 include "ext/async-ext.ext-ocaml.mc"
+include "ext/rtppl-ext.ext-ocaml.mc"
 include "sundials/sundials.ext-ocaml.mc"
 include "multicore/atomic.ext-ocaml.mc"
 include "multicore/thread.ext-ocaml.mc"
@@ -39,7 +40,8 @@ let globalExternalImplsMap : Map String [ExternalImpl] =
       fileExtMap,
       ipoptExtMap,
       tomlExtMap,
-      asyncExtMap
+      asyncExtMap,
+      rtpplExtMap
     ]
 
 -- List OCaml packages available on the system. These are returned on the format
