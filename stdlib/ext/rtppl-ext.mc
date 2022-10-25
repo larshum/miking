@@ -16,6 +16,11 @@ let timestampValue : all a. Opaque -> a = lam tsv.
 external lvRead : Int -> TimeStampedValue
 external lvWrite : Int -> TimeStampedValue -> ()
 
+-- NOTE(larshum, 2022-10-25): Special versions to handle floats in the same way
+-- as in C (the others rely on OCaml marshalling which gives different results).
+external lvReadFloat : Int -> TimeStampedValue
+external lvWriteFloat : Int -> TimeStampedValue
+
 external readBinary : ReadChannel -> Opaque
 let readBinary : all a. ReadChannel -> a =
   lam inChannel.

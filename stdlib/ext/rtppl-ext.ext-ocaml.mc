@@ -10,6 +10,8 @@ let rtpplExtMap =
   mapFromSeq cmpString [
     ("lvRead", impl { expr = "Rtppl.lv_read", ty = tyarrow_ tyint_ tyts_ }),
     ("lvWrite", impl { expr = "Rtppl.lv_write", ty = tyarrows_ [tyint_, tyts_, otyunit_] }),
+    ("lvReadFloat", impl { expr = "Rtppl.lv_read_float", ty = tyarrow_ tyint_ tyts_ }),
+    ("lvWriteFloat", impl { expr = "Rtppl.lv_write_float", ty = tyarrows_ [tyint_, tyts_, otyunit_] }),
     ( "readBinary"
     , impl { expr = "Rtppl.read_binary"
            , ty = tyarrows_ [otyvarext_ "in_channel" [], tyunknown_] }),
