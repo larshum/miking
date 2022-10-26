@@ -14,12 +14,16 @@ let timestampValue : all a. Opaque -> a = lam tsv.
 -- Functions for reading and writing time-stamped values (a tuple containing a
 -- time-stamp and an opaque value), using a latest-value semantics.
 external lvRead : Int -> TimeStampedValue
+let lvRead = lam port. lvRead port
 external lvWrite : Int -> TimeStampedValue -> ()
+let lvWrite = lam port. lam tsv. lvWrite port tsv
 
 -- NOTE(larshum, 2022-10-25): Special versions to handle floats in the same way
 -- as in C (the others rely on OCaml marshalling which gives different results).
 external lvReadFloat : Int -> TimeStampedValue
+let lvReadFloat = lam port. lvReadFloat port
 external lvWriteFloat : Int -> TimeStampedValue
+let lvWriteFloat = lam port. lam tsv. lvWriteFloat port tsv
 
 external readBinary : ReadChannel -> Opaque
 let readBinary : all a. ReadChannel -> a =
