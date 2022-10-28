@@ -45,6 +45,10 @@ external setSignalHandler : Signal -> (Signal -> ()) -> ()
 external clockGetTime : () -> (Int, Int)
 external clockNanosleep : (Int, Int) -> ()
 
+-- Sets the priority of the process, returning the previous priority
+external setMaxPriority : () -> Int
+external setPriority : Int -> Int
+
 mexpr
 
 utest setSignalHandler 1 (lam. print "hello") with true using lam. lam. true in

@@ -26,5 +26,11 @@ let rtpplExtMap =
            , ty = tyarrow_ otyunit_ (otytuple_ [tyint_, tyint_])} ),
     ( "clockNanosleep"
     , impl { expr = "Rtppl.clock_nanosleep"
-           , ty = tyarrow_ (otytuple_ [tyint_, tyint_]) otyunit_ } )
+           , ty = tyarrow_ (otytuple_ [tyint_, tyint_]) otyunit_ } ),
+    ( "setMaxPriority"
+    , impl { expr = "Rtppl.set_max_priority"
+           , ty = tyarrow_ otyunit_ tyint_ } ),
+    ( "setPriority"
+    , impl { expr = "Rtppl.set_priority"
+           , ty = tyarrow_ tyint_ tyint_ } )
   ]
