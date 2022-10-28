@@ -7,7 +7,7 @@ let toTimestampedValue : all a. (Int, a) -> (Int, Opaque) = lam tuple.
   match tuple with (ts, value) in
   (ts, unsafeCoerce value)
 
-let timestampValue : all a. Opaque -> a = lam tsv.
+let timestampValue : all a. TimeStampedValue -> a = lam tsv.
   match tsv with (ts, value) in
   unsafeCoerce value
 
@@ -22,7 +22,7 @@ let lvWrite = lam port. lam tsv. lvWrite port tsv
 -- as in C (the others rely on OCaml marshalling which gives different results).
 external lvReadFloat : Int -> TimeStampedValue
 let lvReadFloat = lam port. lvReadFloat port
-external lvWriteFloat : Int -> TimeStampedValue
+external lvWriteFloat : Int -> TimeStampedValue -> ()
 let lvWriteFloat = lam port. lam tsv. lvWriteFloat port tsv
 
 external readBinary : ReadChannel -> Opaque
