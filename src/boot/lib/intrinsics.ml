@@ -1,5 +1,21 @@
 open Ustring.Op
 
+let ext_map = Hashtbl.create 1024
+
+let add_external id e =
+  Hashtbl.add ext_map id (Obj.magic e)
+
+let get_external id =
+  match Hashtbl.find_opt ext_map id with
+  | Some e -> Obj.magic e
+  | None ->
+      Printf.eprintf "Could not find definition of external %s\n" id;
+      exit 1
+
+let load_externals deps dyn_ext_file =
+  Fl_dynload.load_packages deps;
+  Dynlink.loadfile dyn_ext_file
+
 module Mseq = struct
   type 'a t = List of 'a List.t | Rope of 'a Rope.t
 

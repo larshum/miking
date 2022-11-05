@@ -1,5 +1,11 @@
 open Ustring.Op
 
+val add_external : string -> 'a -> unit
+
+val get_external : string -> 'a
+
+val load_externals : string list -> string -> unit
+
 (* The functions in this module have their time-complexity in their
  * documentation. Many depend on the complexity of some underlying operation in
  * OCaml, which does not have a documented complexity. In these cases we assume
