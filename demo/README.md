@@ -36,9 +36,9 @@ Theree new intrinsics are added to support this:
 * `add_external : string -> 'a -> unit` and `get_external : string -> 'a` to
   add new externals and to load them, using a global hashtable. For the
   approach described above, the `add_external` would not be needed as an
-  intrinsic, as it only runs in the intermediate file. However, I imagine it
-  could be useful in other cases, for example when doing just-in time
-  compilation.
+  intrinsic, as it only runs in the intermediate file (which we probably want to
+  generate directly). However, I imagine it could be useful in other cases, for
+  example for doing just-in time compilation.
 * `load_libraries : string list -> string -> unit` to load the external
   library dependencies as well as the intermediate library. This intrinsic is
   necessary since we want to do this in the interpreter.
