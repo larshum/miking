@@ -43,6 +43,12 @@ Theree new intrinsics are added to support this:
   library dependencies as well as the intermediate library. This intrinsic is
   necessary since we want to do this in the interpreter.
 
+## Example
+
+The example program `program.ml` is derived from the result of compiling
+`stdlib/ext/dist-ext.mc` with tests enabled. To run it, use the command
+`dune exec ./demo/program.exe` from the root of the repo.
+
 ## Limitations
 
 Specifically for the `owl` library, it seems the dynamic loading fails by
