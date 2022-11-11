@@ -1,0 +1,17 @@
+(env
+  (dev
+    (flags (:standard -w -a -g))
+    (ocamlc_flags (-without-runtime))))
+
+(library
+  (name extdyn)
+  (public_name mexpr-ext.plugin)
+  (modules extdyn)
+  (libraries boot owl))
+
+(executable
+  (name program)
+  (public_name program)
+  (modules program)
+  (libraries boot eigen)
+  (modes native))
