@@ -4,10 +4,11 @@ This is a sketch of how support for externals could be implemented using
 dynamic loading of the dependent libraries. The approach is as follows:
 1. We generate an intermediate file (`extdyn.ml`) which declares all the
    externals we desire using the new `add_external` intrinsic.
-2. This is compiled as a library (see configuration in `dune`) and statically
-   linked with the external libraries _and_ the `boot` library.
+2. This is compiled as a library (see configuration in `dune`) which is
+   statically linked with the external OCaml libraries _and_ the `boot`
+   library.
 3. In the generated OCaml code (`program.ml`), we make the following changes
-   compared to now:
+   compared with the current code generation:
   1. At the start of the file, we use the new `load_intrinsics` function of
      boot to load the externals we need. The first argument is the list of
      libraries we wish to load dynamically - the same as we link statically
