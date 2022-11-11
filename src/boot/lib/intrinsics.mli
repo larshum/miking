@@ -4,7 +4,7 @@ val add_external : string -> 'a -> unit
 
 val get_external : string -> 'a
 
-val load_externals : string list -> string -> unit
+val load_libraries : string list -> string -> unit
 
 (* The functions in this module have their time-complexity in their
  * documentation. Many depend on the complexity of some underlying operation in

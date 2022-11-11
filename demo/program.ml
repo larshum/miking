@@ -1,8 +1,5 @@
 let _ =
-  (* The following should work in either compiled or interpreted mode. We first
-     load the package dependencies of the externals (in this case, owl), and
-     then we load the generated dynamic library using Dynlink. *)
-  Boot.Intrinsics.load_externals ["owl"] "./_build/default/demo/extdyn.cmxs";;
+  Boot.Intrinsics.load_libraries ["owl"] "./_build/default/demo/extdyn.cmxs";;
 
 type v_record'1653 =
   | CRec'1652 of {l0: Obj.t;l1: Obj.t};;

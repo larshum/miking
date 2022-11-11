@@ -12,7 +12,7 @@ let get_external id =
       Printf.eprintf "Could not find definition of external %s\n" id;
       exit 1
 
-let load_externals deps dyn_ext_file =
+let load_libraries deps dyn_ext_file =
   Fl_dynload.load_packages deps;
   Dynlink.loadfile dyn_ext_file
 
