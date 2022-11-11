@@ -27,6 +27,6 @@ let main =
   Boot.Intrinsics.add_external "externalUniformContinuousSample" Owl_stats.uniform_rvs;
   Boot.Intrinsics.add_external "externalUniformDiscreteSample" Owl_stats.uniform_int_rvs;
 
-  (* and so on for the rest of the externals declared in the file... *)
+  (* and so on for the rest of the externals declared in the original MExpr file... *)
 
   ()
