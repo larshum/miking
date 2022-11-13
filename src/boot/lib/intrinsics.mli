@@ -1,11 +1,5 @@
 open Ustring.Op
 
-val add_external : string -> 'a -> unit
-
-val get_external : string -> 'a
-
-val load_libraries : string list -> string -> unit
-
 (* The functions in this module have their time-complexity in their
  * documentation. Many depend on the complexity of some underlying operation in
  * OCaml, which does not have a documented complexity. In these cases we assume
@@ -434,6 +428,14 @@ end
 
 module ConTag : sig
   val constructor_tag : Obj.t -> int
+end
+
+module Ext : sig
+  val add_external : int Mseq.t -> 'a -> unit
+
+  val get_external : int Mseq.t -> 'a
+
+  val load_libraries : int Mseq.t Mseq.t -> int Mseq.t -> unit
 end
 
 module Mmap : sig

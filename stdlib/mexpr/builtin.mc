@@ -101,6 +101,10 @@ let builtin = use MExprAst in
   , ("ref", CRef ())
   , ("deref", CDeRef ())
   , ("modref", CModRef ())
+  -- External support
+  , ("addExternal", CAddExternal ())
+  , ("getExternal", CGetExternal ())
+  , ("loadLibraries", CLoadLibraries ())
   -- Maps
   , ("mapEmpty", CMapEmpty ())
   , ("mapSize", CMapSize ())

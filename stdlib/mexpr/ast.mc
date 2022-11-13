@@ -859,6 +859,13 @@ lang RefOpAst = ConstAst
   | CDeRef {}
 end
 
+lang ExtSupportAst = ConstAst
+  syn Const =
+  | CAddExternal ()
+  | CGetExternal ()
+  | CLoadLibraries ()
+end
+
 lang MapAst = ConstAst
   syn Const =
   | CMapEmpty {}
@@ -1512,8 +1519,8 @@ lang MExprAst =
   CmpIntAst + IntCharConversionAst + CmpFloatAst + CharAst + CmpCharAst +
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
-  FloatStringConversionAst + TimeAst + ConTagAst + RefOpAst + MapAst +
-  TensorOpAst + BootParserAst + UnsafeCoerceAst +
+  FloatStringConversionAst + TimeAst + ConTagAst + RefOpAst + ExtSupportAst +
+  MapAst + TensorOpAst + BootParserAst + UnsafeCoerceAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

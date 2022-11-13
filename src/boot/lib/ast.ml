@@ -181,6 +181,10 @@ and const =
   | Cref
   | CmodRef of tm ref option
   | CdeRef
+  (* MCore intrinsics: External support *)
+  | CaddExternal of ustring option
+  | CgetExternal
+  | CloadLibraries of ustring list option
   (* MCore intrinsics: Maps *)
   (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)
   | CMap of tm * Obj.t
@@ -653,6 +657,9 @@ let const_has_side_effect = function
       true
   (* MCore intrinsics: References *)
   | Cref | CmodRef _ | CdeRef ->
+      true
+  (* MCore intrinsics: External support *)
+  | CaddExternal _ | CgetExternal | CloadLibraries _ ->
       true
   (* MCore intrinsics: Maps *)
   (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)

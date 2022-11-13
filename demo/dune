@@ -7,6 +7,7 @@
   (name extdyn)
   (public_name mexpr-ext.plugin)
   (modules extdyn)
+  (modes native)
   (libraries boot owl))
 
 (executable

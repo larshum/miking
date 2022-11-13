@@ -479,6 +479,12 @@ let rec print_const fmt = function
       fprintf fmt "modref"
   | CdeRef ->
       fprintf fmt "deref"
+  | CaddExternal _ ->
+      fprintf fmt "addExternal"
+  | CgetExternal ->
+      fprintf fmt "getExternal"
+  | CloadLibraries _ ->
+      fprintf fmt "loadLibraries"
   (* MCore intrinsics: Maps *)
   | CMap (_, m) ->
       let binds =

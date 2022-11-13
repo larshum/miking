@@ -187,6 +187,13 @@ lang RefOpArity = RefOpAst
   | CDeRef _ -> 1
 end
 
+lang ExtSupportArity = ExtSupportAst
+  sem constArity =
+  | CAddExternal _ -> 2
+  | CGetExternal _ -> 1
+  | CLoadLibraries _ -> 2
+end
+
 lang MapArity = MapAst
   sem constArity =
   | CMapEmpty _ -> 1
@@ -254,8 +261,8 @@ lang MExprArity =
   CharArity + CmpCharArity + IntCharConversionArity +
   FloatStringConversionArity + SymbArity + CmpSymbArity + SeqOpArity +
   FileOpArity + IOArity + RandomNumberGeneratorArity + SysArity + TimeArity +
-  ConTagArity + RefOpArity + MapArity + TensorOpArity + BootParserArity +
-  UnsafeCoerceArity
+  ConTagArity + RefOpArity + ExtSupportArity + MapArity + TensorOpArity +
+  BootParserArity + UnsafeCoerceArity
 end
 
 mexpr

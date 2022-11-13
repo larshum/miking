@@ -13,6 +13,7 @@ include "ast-builder.mc"
 include "symbolize.mc"
 include "eq.mc"
 include "pprint.mc"
+include "jit.mc"
 
 ----------------------------
 -- EVALUATION ENVIRONMENT --
@@ -82,12 +83,28 @@ lang FixAst = LamAst
   | TmFix ()
 end
 
-lang VarEval = Eval + VarAst + FixAst + AppAst
+lang LamEval = Eval + LamAst
+  syn Expr =
+  | TmClos {ident : Name, body : Expr, env : Env}
+
+  sem apply ctx info arg =
+  | TmClos t -> eval {ctx with env = evalEnvInsert t.ident arg t.env} t.body
+
+  sem eval ctx =
+  | TmLam t -> TmClos {ident = t.ident, body = t.body, env = ctx.env}
+  | TmClos t -> TmClos t
+end
+
+lang VarEval = Eval + VarAst + FixAst + AppAst + MExprJIT + LamEval
   sem eval ctx =
   | TmVar r ->
     match evalEnvLookup r.ident ctx.env with Some t then
       match t with TmApp {lhs = TmFix _} then
         eval ctx t
+      /-else match t with TmClos x then
+        let l = TmLam {ident = x.ident, body = x.body, ty = r.ty, info = r.info,
+                       tyIdent = TyUnknown {info = r.info}} in
+        optionGetOrElse (lam. t) (jitCompile r.ident l)-/
       else t
     else
       errorSingle [r.info] (concat "Unknown variable: " (pprintVarString (nameGetStr r.ident)))
@@ -100,18 +117,6 @@ lang AppEval = Eval + AppAst
 
   sem eval ctx =
   | TmApp r -> apply ctx r.info (eval ctx r.rhs) (eval ctx r.lhs)
-end
-
-lang LamEval = Eval + LamAst + VarEval + AppEval
-  syn Expr =
-  | TmClos {ident : Name, body : Expr, env : Env}
-
-  sem apply ctx info arg =
-  | TmClos t -> eval {ctx with env = evalEnvInsert t.ident arg t.env} t.body
-
-  sem eval ctx =
-  | TmLam t -> TmClos {ident = t.ident, body = t.body, env = ctx.env}
-  | TmClos t -> TmClos t
 end
 
 lang LetEval = Eval + LetAst + VarEval
@@ -1127,6 +1132,29 @@ lang ConTagEval = ConTagAst + DataAst + IntAst + IntTypeAst
                  info = NoInfo ()}
       else zeroConst ()
     else zeroConst ()
+end
+
+lang ExtSupportEval = ExtSupportAst + UnknownTypeAst + SeqAst
+  syn Const =
+  | CLoadLibraries2 ()
+
+  sem delta info arg =
+  | CAddExternal _ -> errorSingle [info] "Not supported in interpreter"
+  | CGetExternal _ ->
+    match arg with TmSeq {tms = tms} then
+      let id = _evalSeqOfCharsToString info tms in
+      getExternal id
+    else errorSingle [info] "Not getExternal of string"
+  | CLoadLibraries _ ->
+    match arg with TmSeq {tms = []} then
+      TmConst {val = CLoadLibraries2 (), ty = TyUnknown {info = info}, info = info}
+    else errorSingle [info] "External library loading not supported in interpreter"
+  | CLoadLibraries2 _ ->
+    match arg with TmSeq {tms = tms} then
+      let id = _evalSeqOfCharsToString info tms in
+      loadLibraries [] id;
+      uunit_
+    else errorSingle [info] "Not loadLibraries of string"
 end
 
 lang MapEval =
@@ -2151,7 +2179,8 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
   IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
-  ConTagEval + MapEval + TensorOpEval + BootParserEval + UnsafeCoerceEval
+  ExtSupportEval + ConTagEval + MapEval + TensorOpEval + BootParserEval +
+  UnsafeCoerceEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +

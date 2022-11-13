@@ -1,5 +1,9 @@
 let _ =
-  Boot.Intrinsics.load_libraries ["owl"] "./_build/default/demo/extdyn.cmxs";;
+  let libs = Boot.Intrinsics.Mseq.Helpers.of_list
+    [Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "owl")] in
+  let cmxs = Boot.Intrinsics.Mseq.Helpers.of_ustring
+    (Boot.Ustring.from_utf8 "./_build/default/demo/extdyn.cmxs") in
+  Boot.Intrinsics.Ext.load_libraries libs cmxs;;
 
 type v_record'1653 =
   | CRec'1652 of {l0: Obj.t;l1: Obj.t};;
@@ -702,7 +706,7 @@ let v_ =
   in
   let v_externalExp'622 =
     fun v_x'1663 ->
-      (Boot.Intrinsics.get_external "exp")
+      (Boot.Intrinsics.Ext.get_external (Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "exp")))
         v_x'1663
   in
   let v_exp'624 =
@@ -713,7 +717,7 @@ let v_ =
   in
   let v_externalLog'625 =
     fun v_x'1664 ->
-      (Boot.Intrinsics.get_external "log")
+      (Boot.Intrinsics.Ext.get_external (Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "log")))
         v_x'1664
   in
   let v_log'627 =
@@ -778,7 +782,7 @@ let v_ =
     fun v_x'1665 ->
       fun v_x'1666 ->
         fun v_x'1667 ->
-          (Boot.Intrinsics.get_external "externalGammaLogPdf")
+          (Boot.Intrinsics.Ext.get_external (Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "externalGammaLogPdf")))
             v_x'1665
             ~shape:(v_x'1666)
             ~scale:(v_x'1667)
@@ -786,7 +790,7 @@ let v_ =
   let v_externalGammaSample'638 =
     fun v_x'1668 ->
       fun v_x'1669 ->
-        (Boot.Intrinsics.get_external "externalGammaSample")
+        (Boot.Intrinsics.Ext.get_external (Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "externalGammaSample")))
           ~shape:(v_x'1668)
           ~scale:(v_x'1669)
   in
@@ -824,7 +828,7 @@ let v_ =
     fun v_x'1670 ->
       fun v_x'1671 ->
         fun v_x'1672 ->
-          (Boot.Intrinsics.get_external "externalBinomialLogPmf")
+          (Boot.Intrinsics.Ext.get_external (Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "externalBinomialLogPmf")))
             v_x'1670
             ~p:(v_x'1671)
             ~n:(v_x'1672)
@@ -832,7 +836,7 @@ let v_ =
   let v_externalBinomialSample'651 =
     fun v_x'1673 ->
       fun v_x'1674 ->
-        (Boot.Intrinsics.get_external "externalBinomialSample")
+        (Boot.Intrinsics.Ext.get_external (Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "externalBinomialSample")))
           ~p:(v_x'1673)
           ~n:(v_x'1674)
   in
@@ -912,7 +916,7 @@ let v_ =
     fun v_x'1675 ->
       fun v_x'1676 ->
         fun v_x'1677 ->
-          (Boot.Intrinsics.get_external "externalBetaLogPdf")
+          (Boot.Intrinsics.Ext.get_external (Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "externalBetaLogPdf")))
             v_x'1675
             ~a:(v_x'1676)
             ~b:(v_x'1677)
@@ -920,7 +924,7 @@ let v_ =
   let v_externalBetaSample'672 =
     fun v_x'1678 ->
       fun v_x'1679 ->
-        (Boot.Intrinsics.get_external "externalBetaSample")
+        (Boot.Intrinsics.Ext.get_external (Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "externalBetaSample")))
           ~a:(v_x'1678)
           ~b:(v_x'1679)
   in
@@ -958,7 +962,7 @@ let v_ =
     fun v_x'1680 ->
       fun v_x'1681 ->
         fun v_x'1682 ->
-          (Boot.Intrinsics.get_external "externalGaussianLogPdf")
+          (Boot.Intrinsics.Ext.get_external (Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "externalGaussianLogPdf")))
             v_x'1680
             ~mu:(v_x'1681)
             ~sigma:(v_x'1682)
@@ -966,7 +970,7 @@ let v_ =
   let v_externalGaussianSample'685 =
     fun v_x'1683 ->
       fun v_x'1684 ->
-        (Boot.Intrinsics.get_external "externalGaussianSample")
+        (Boot.Intrinsics.Ext.get_external (Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "externalGaussianSample")))
           ~mu:(v_x'1683)
           ~sigma:(v_x'1684)
   in
@@ -1003,7 +1007,7 @@ let v_ =
   let v_externalMultinomialLogPmf'697 =
     fun v_x'1685 ->
       fun v_x'1687 ->
-        (Boot.Intrinsics.get_external "externalMultinomialLogPmf")
+        (Boot.Intrinsics.Ext.get_external (Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "externalMultinomialLogPmf")))
           (Boot.Intrinsics.Mseq.Helpers.to_array_copy
              v_x'1685)
           ~p:(Boot.Intrinsics.Mseq.Helpers.to_array_copy
@@ -1013,14 +1017,14 @@ let v_ =
     fun v_x'1689 ->
       fun v_x'1690 ->
         Boot.Intrinsics.Mseq.Helpers.of_array_copy
-          ((Boot.Intrinsics.get_external "externalMultinomialSample")
+          ((Boot.Intrinsics.Ext.get_external (Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "externalMultinomialSample")))
              v_x'1689
              ~p:(Boot.Intrinsics.Mseq.Helpers.to_array_copy
                v_x'1690))
   in
   let v_externalCategoricalSample'699 =
     fun v_x'1693 ->
-      (Boot.Intrinsics.get_external "externalCategoricalSample")
+      (Boot.Intrinsics.Ext.get_external (Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "externalCategoricalSample")))
         (Boot.Intrinsics.Mseq.Helpers.to_array_copy
            v_x'1693)
   in
@@ -1077,7 +1081,7 @@ let v_ =
   let v_externalDirichletLogPdf'717 =
     fun v_x'1695 ->
       fun v_x'1697 ->
-        (Boot.Intrinsics.get_external "externalDirichletLogPdf")
+        (Boot.Intrinsics.Ext.get_external (Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "externalDirichletLogPdf")))
           (Boot.Intrinsics.Mseq.Helpers.to_array_copy
              v_x'1695)
           ~alpha:(Boot.Intrinsics.Mseq.Helpers.to_array_copy
@@ -1086,7 +1090,7 @@ let v_ =
   let v_externalDirichletSample'718 =
     fun v_x'1699 ->
       Boot.Intrinsics.Mseq.Helpers.of_array_copy
-        ((Boot.Intrinsics.get_external "externalDirichletSample")
+        ((Boot.Intrinsics.Ext.get_external (Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "externalDirichletSample")))
            ~alpha:(Boot.Intrinsics.Mseq.Helpers.to_array_copy
              v_x'1699))
   in
@@ -1134,7 +1138,7 @@ let v_ =
   let v_externalUniformContinuousSample'727 =
     fun v_x'1702 ->
       fun v_x'1703 ->
-        (Boot.Intrinsics.get_external "externalUniformContinuousSample")
+        (Boot.Intrinsics.Ext.get_external (Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "externalUniformContinuousSample")))
           v_x'1702
           v_x'1703
   in
@@ -1224,7 +1228,7 @@ let v_ =
   let v_externalUniformDiscreteSample'741 =
     fun v_x'1704 ->
       fun v_x'1705 ->
-        (Boot.Intrinsics.get_external "externalUniformDiscreteSample")
+        (Boot.Intrinsics.Ext.get_external (Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "externalUniformDiscreteSample")))
           v_x'1704
           v_x'1705
   in
@@ -1397,7 +1401,7 @@ let v_ =
   in
   let v_externalExponentialSample'769 =
     fun v_x'1706 ->
-      (Boot.Intrinsics.get_external "externalExponentialSample")
+      (Boot.Intrinsics.Ext.get_external (Boot.Intrinsics.Mseq.Helpers.of_ustring (Boot.Ustring.from_utf8 "externalExponentialSample")))
         ~lambda:(v_x'1706)
   in
   let v_exponentialSample'771 =
