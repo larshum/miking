@@ -146,10 +146,10 @@ let record2tuple
 -----------
 
 lang IdentifierPrettyPrint
-  sem pprintVarName  (env : PprintEnv) =
-  sem pprintConName  (env : PprintEnv) =
-  sem pprintTypeName (env : PprintEnv) =
-  sem pprintLabelString =                -- Record label string parser translation
+  sem pprintVarName : PprintEnv -> Name -> (PprintEnv, String)
+  sem pprintConName : PprintEnv -> Name -> (PprintEnv, String)
+  sem pprintTypeName : PprintEnv -> Name -> (PprintEnv, String)
+  sem pprintLabelString : SID -> String
 
   -- Get a string for the given name. Returns both the string and a new
   -- environment.
@@ -316,7 +316,7 @@ lang LamPrettyPrint = PrettyPrint + LamAst + UnknownTypeAst
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmLam t ->
     match pprintVarName env t.ident with (env,str) in
-    match getTypeStringCode indent env t.tyIdent with (env, ty) in
+    match getTypeStringCode indent env t.tyAnnot with (env, ty) in
     let ty = if eqString ty "Unknown" then "" else concat ": " ty in
     match pprintCode (pprintIncr indent) env t.body with (env,body) in
     (env,
@@ -380,8 +380,8 @@ lang LetPrettyPrint = PrettyPrint + LetAst + UnknownTypeAst
       in (env, join [body, pprintNewline indent, "; ", inexpr])
     else
       match
-        match t.tyBody with TyUnknown _ then (env,"") else
-        match getTypeStringCode indent env t.tyBody with (env, ty) in
+        match t.tyAnnot with TyUnknown _ then (env,"") else
+        match getTypeStringCode indent env t.tyAnnot with (env, ty) in
         (env, concat ": " ty)
       with (env, ty) in
       match pprintCode (pprintIncr indent) env t.body with (env,body) in
@@ -446,7 +446,7 @@ lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst + UnknownTypeAst
     let f = lam env. lam bind : RecLetBinding.
       match pprintVarName env bind.ident with (env,str) in
       match pprintCode iii env bind.body with (env,body) in
-      match getTypeStringCode indent env bind.tyBody with (env, ty) in
+      match getTypeStringCode indent env bind.tyAnnot with (env, ty) in
         let ty = if eqString ty "Unknown" then "" else concat ": " ty in
         (env, join ["let ", str, ty, " =", pprintNewline iii, body])
     in
@@ -1117,25 +1117,13 @@ lang VarTypePrettyPrint = IdentifierPrettyPrint + VarTypeAst
     pprintVarName env t.ident
 end
 
-lang VarSortPrettyPrint = RecordTypePrettyPrint + VarSortAst
+lang VarSortPrettyPrint = PrettyPrint + RecordTypeAst + VarSortAst
   sem getVarSortStringCode (indent : Int) (env : PprintEnv) (idstr : String) =
   | RecordVar r ->
     let recty = TyRecord {info = NoInfo (), fields = r.fields} in
     match getTypeStringCode indent env recty with (env, recstr) in
-    (env, join [idstr, "<:", recstr])
+    (env, join [init recstr, " ... ", [last recstr]])
   | _ -> (env, idstr)
-end
-
-lang FlexTypePrettyPrint = IdentifierPrettyPrint + VarSortPrettyPrint + FlexTypeAst
-  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  | TyFlex t & ty ->
-    match deref t.contents with Unbound t then
-      match pprintVarName env t.ident with (env, idstr) in
-      match getVarSortStringCode indent env idstr t.sort with (env, str) in
-      let weakPrefix = if t.isWeak then "_" else "" in
-      (env, concat weakPrefix str)
-    else
-      getTypeStringCode indent env (resolveLink ty)
 end
 
 lang AllTypePrettyPrint = IdentifierPrettyPrint + AllTypeAst + VarSortPrettyPrint
@@ -1159,6 +1147,11 @@ lang AppTypePrettyPrint = PrettyPrint + AppTypeAst
     match printTypeParen indent 1 env t.lhs with (env,lhs) in
     match printTypeParen indent 2 env t.rhs with (env,rhs) in
     (env, join [lhs, " ", rhs])
+end
+
+lang AliasTypePrettyPrint = PrettyPrint + AliasTypeAst
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
+  | TyAlias t -> getTypeStringCode indent env t.display
 end
 
 
@@ -1199,8 +1192,9 @@ lang MExprPrettyPrint =
   UnknownTypePrettyPrint + BoolTypePrettyPrint + IntTypePrettyPrint +
   FloatTypePrettyPrint + CharTypePrettyPrint + FunTypePrettyPrint +
   SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
-  ConTypePrettyPrint + VarTypePrettyPrint + FlexTypePrettyPrint +
-  AppTypePrettyPrint + TensorTypePrettyPrint + AllTypePrettyPrint
+  ConTypePrettyPrint + VarTypePrettyPrint +
+  AppTypePrettyPrint + TensorTypePrettyPrint + AllTypePrettyPrint +
+  AliasTypePrettyPrint
 
   -- Identifiers
   + MExprIdentifierPrettyPrint

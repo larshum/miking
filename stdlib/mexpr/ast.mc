@@ -106,6 +106,26 @@ lang Ast
     let res: (acc, Expr) = smapAccumL_Expr_Type (lam acc. lam a. (f acc a, a)) acc p in
     res.0
 
+  -- NOTE(aathn, 2022-11-15): This function covers the compiler-added annotations
+  -- which are not touched by smapAccumL_Expr_Type.
+  sem smapAccumL_Expr_TypeLabel : all acc. (acc -> Type -> (acc, Type)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_TypeLabel f acc =
+  | p ->
+    match f acc (tyTm p) with (acc, ty) in
+    (acc, withType ty p)
+
+  sem smap_Expr_TypeLabel : (Type -> Type) -> Expr -> Expr
+  sem smap_Expr_TypeLabel f =
+  | p ->
+    let res: ((), Expr) = smapAccumL_Expr_TypeLabel (lam. lam a. ((), f a)) () p in
+    res.1
+
+  sem sfold_Expr_TypeLabel : all acc. (acc -> Type -> acc) -> acc -> Expr -> acc
+  sem sfold_Expr_TypeLabel f acc =
+  | p ->
+    let res: (acc, Expr) = smapAccumL_Expr_TypeLabel (lam acc. lam a. (f acc a, a)) acc p in
+    res.0
+
   sem smapAccumL_Expr_Pat : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Expr -> (acc, Expr)
   sem smapAccumL_Expr_Pat f acc =
   | p -> (acc, p)
@@ -137,6 +157,23 @@ lang Ast
   | p ->
     let res: (acc, Type) = smapAccumL_Type_Type (lam acc. lam a. (f acc a, a)) acc p in
     res.0
+
+  -- Resolving application -- apply an accumulating function through links and aliases
+  sem rappAccumL_Type_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Type -> (acc, Type)
+  sem rappAccumL_Type_Type f acc = | ty -> (acc, ty)
+
+  sem rapp_Type_Type : (Type -> Type) -> Type -> Type
+  sem rapp_Type_Type f = | ty ->
+    let res : ((), Type) = rappAccumL_Type_Type (lam. lam t. ((), f t)) () ty in
+    res.1
+
+  -- Strip all-quantifiers and aliases to inspect the structure of the type
+  sem inspectType : Type -> Type
+  sem inspectType = | ty -> rapp_Type_Type inspectType ty
+
+  -- Unwrap links and aliases to expose the underlying type
+  sem unwrapType : Type -> Type
+  sem unwrapType = | ty -> rapp_Type_Type unwrapType ty
 
   sem smapAccumL_Pat_Pat : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Pat -> (acc, Pat)
   sem smapAccumL_Pat_Pat f acc =
@@ -185,6 +222,24 @@ lang Ast
   | p ->
     match smapAccumL_Pat_Type (lam acc. lam a. (f acc a, a)) acc p
     with (acc, _) in acc
+
+  sem countExprNodes count = | t ->
+    let count = addi count 1 in
+    let count = sfold_Expr_Expr countExprNodes count t in
+    let count = sfold_Expr_Type countTypeNodes count t in
+    let count = sfold_Expr_TypeLabel countTypeNodes count t in
+    let count = sfold_Expr_Pat countPatNodes count t in
+    count
+  sem countTypeNodes count = | t ->
+    let count = addi count 1 in
+    let count = sfold_Type_Type countTypeNodes count t in
+    count
+  sem countPatNodes count = | t ->
+    let count = addi count 1 in
+    let count = sfold_Pat_Pat countPatNodes count t in
+    let count = sfold_Pat_Expr countExprNodes count t in
+    let count = sfold_Pat_Type countTypeNodes count t in
+    count
 end
 
 -- TmVar --
@@ -243,6 +298,7 @@ end
 lang LamAst = Ast + VarAst + AppAst
   syn Expr =
   | TmLam {ident : Name,
+           tyAnnot : Type,
            tyIdent : Type,
            body : Expr,
            ty : Type,
@@ -262,15 +318,19 @@ lang LamAst = Ast + VarAst + AppAst
 
   sem smapAccumL_Expr_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TmLam t ->
-    match f acc t.tyIdent with (acc, tyIdent) then
-      (acc, TmLam {t with tyIdent = tyIdent})
-    else never
+    match f acc t.tyAnnot with (acc, tyAnnot) in
+    (acc, TmLam {t with tyAnnot = tyAnnot})
+
+  sem smapAccumL_Expr_TypeLabel (f : acc -> Type -> (acc, Type)) (acc : acc) =
+  | TmLam t ->
+    match f acc t.tyIdent with (acc, tyIdent) in
+    match f acc t.ty with (acc, ty) in
+    (acc, TmLam {t with tyIdent = tyIdent, ty = ty})
 
   sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmLam t ->
-    match f acc t.body with (acc, body) then
-      (acc, TmLam {t with body = body})
-    else never
+    match f acc t.body with (acc, body) in
+    (acc, TmLam {t with body = body})
 end
 
 
@@ -278,6 +338,7 @@ end
 lang LetAst = Ast + VarAst
   syn Expr =
   | TmLet {ident : Name,
+           tyAnnot : Type,
            tyBody : Type,
            body : Expr,
            inexpr : Expr,
@@ -298,23 +359,27 @@ lang LetAst = Ast + VarAst
 
   sem smapAccumL_Expr_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TmLet t ->
-    match f acc t.tyBody with (acc, tyBody) then
-      (acc, TmLet {t with tyBody = tyBody})
-    else never
+    match f acc t.tyAnnot with (acc, tyAnnot) in
+    (acc, TmLet {t with tyAnnot = tyAnnot})
+
+  sem smapAccumL_Expr_TypeLabel (f : acc -> Type -> (acc, Type)) (acc : acc) =
+  | TmLet t ->
+    match f acc t.tyBody with (acc, tyBody) in
+    match f acc t.ty with (acc, ty) in
+    (acc, TmLet {t with tyBody = tyBody, ty = ty})
 
   sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmLet t ->
-    match f acc t.body with (acc, body) then
-      match f acc t.inexpr with (acc, inexpr) then
-        (acc, TmLet {{t with body = body} with inexpr = inexpr})
-      else never
-    else never
+    match f acc t.body with (acc, body) in
+    match f acc t.inexpr with (acc, inexpr) in
+    (acc, TmLet {{t with body = body} with inexpr = inexpr})
 end
 
 -- TmRecLets --
 lang RecLetsAst = Ast + VarAst
   type RecLetBinding = {
     ident : Name,
+    tyAnnot : Type,
     tyBody : Type,
     body : Expr,
     info : Info }
@@ -340,22 +405,30 @@ lang RecLetsAst = Ast + VarAst
   sem smapAccumL_Expr_Type (f:  acc -> Type -> (acc, Type)) (acc : acc) =
   | TmRecLets t ->
     let bindingFunc = lam acc. lam b: RecLetBinding.
-      match f acc b.tyBody with (acc, tyBody) in
-      (acc, {b with tyBody = tyBody}) in
+      match f acc b.tyAnnot with (acc, tyAnnot) in
+      (acc, {b with tyAnnot = tyAnnot}) in
     match mapAccumL bindingFunc acc t.bindings with (acc, bindings) in
     (acc, TmRecLets {t with bindings = bindings})
+
+  sem smapAccumL_Expr_TypeLabel (f : acc -> Type -> (acc, Type)) (acc : acc) =
+  | TmRecLets t ->
+    let bindingFunc = lam acc. lam b: RecLetBinding.
+      match f acc b.tyBody with (acc, tyBody) in
+      (acc, {b with tyBody = tyBody})
+    in
+    match mapAccumL bindingFunc acc t.bindings with (acc, bindings) in
+    match f acc t.ty with (acc, ty) in
+    (acc, TmRecLets {t with bindings = bindings, ty = ty})
 
   sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmRecLets t ->
     let bindingFunc = lam acc. lam b: RecLetBinding.
-      match f acc b.body with (acc, body) then
-        (acc, {b with body = body})
-      else never in
-    match mapAccumL bindingFunc acc t.bindings with (acc, bindings) then
-      match f acc t.inexpr with (acc, inexpr) then
-        (acc, TmRecLets {{t with bindings = bindings} with inexpr = inexpr})
-      else never
-    else never
+      match f acc b.body with (acc, body) in
+      (acc, {b with body = body})
+    in
+    match mapAccumL bindingFunc acc t.bindings with (acc, bindings) in
+    match f acc t.inexpr with (acc, inexpr) in
+    (acc, TmRecLets {{t with bindings = bindings} with inexpr = inexpr})
 end
 
 
@@ -1403,51 +1476,6 @@ lang VarSortAst
     match smapAccumL_VarSort_Type (lam a. lam x. (f a x, x)) acc s with (a, _) in a
 end
 
-type FlexVarRec = {ident  : Name,
-                   level  : Level,
-                   sort   : VarSort,
-                   isWeak : Bool}
-
-lang FlexTypeAst = VarSortAst + Ast
-  syn FlexVar =
-  | Unbound FlexVarRec
-  | Link Type
-
-  syn Type =
-  -- Flexible type variable
-  | TyFlex {info     : Info,
-            contents : Ref FlexVar}
-
-  -- Recursively follow links, producing something guaranteed not to be a link.
-  sem resolveLink =
-  | TyFlex t & ty ->
-    match deref t.contents with Link ty then
-      resolveLink ty
-    else
-      ty
-  | ty ->
-    ty
-
-  sem tyWithInfo (info : Info) =
-  | TyFlex t & ty ->
-    match deref t.contents with Unbound _ then
-      TyFlex {t with info = info}
-    else
-      tyWithInfo info (resolveLink ty)
-
-  sem infoTy =
-  | TyFlex {info = info} -> info
-
-  sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
-  | TyFlex t & ty ->
-    match deref t.contents with Unbound r then
-      match smapAccumL_VarSort_Type f acc r.sort with (acc, sort) in
-      modref t.contents (Unbound {r with sort = sort});
-      (acc, ty)
-    else
-      smapAccumL_Type_Type f acc (resolveLink ty)
-end
-
 lang AllTypeAst = VarSortAst + Ast
   syn Type =
   | TyAll {info  : Info,
@@ -1468,12 +1496,15 @@ lang AllTypeAst = VarSortAst + Ast
     (acc, TyAll {{t with sort = sort}
                     with ty = ty})
 
+  sem inspectType =
+  | TyAll t -> inspectType t.ty
+
   sem stripTyAll =
   | ty -> stripTyAllBase [] ty
 
   sem stripTyAllBase (vars : [(Name, VarSort)]) =
   | TyAll t -> stripTyAllBase (snoc vars (t.ident, t.sort)) t.ty
-  | ty -> (vars, ty)
+  | ty -> rappAccumL_Type_Type stripTyAllBase vars ty
 end
 
 lang AppTypeAst = Ast
@@ -1495,6 +1526,34 @@ lang AppTypeAst = Ast
 
   sem infoTy =
   | TyApp r -> r.info
+end
+
+lang AliasTypeAst = AllTypeAst
+  syn Type =
+  -- An aliased type, treated as content but printed as display.
+  | TyAlias {display : Type,
+             content : Type}
+
+  sem tyWithInfo (info : Info) =
+  | TyAlias t -> TyAlias {t with display = tyWithInfo info t.display}
+
+  sem infoTy =
+  | TyAlias t -> infoTy t.display
+
+  sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
+  | TyAlias t ->
+    match f acc t.content with (acc, content) in
+    (acc, TyAlias {t with content = content})
+
+  sem rappAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
+  | TyAlias t -> f acc t.content
+
+  sem stripTyAll =
+  | TyAlias t & ty ->
+    switch stripTyAll t.content
+    case ([], _) then ([], ty)
+    case stripped then stripped
+    end
 end
 
 ------------------------
@@ -1522,5 +1581,5 @@ lang MExprAst =
   -- Types
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst +
-  VarTypeAst + FlexTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst
+  VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst + AliasTypeAst
 end

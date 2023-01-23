@@ -56,8 +56,8 @@ lang CSE = MExprCmp
           foldl
             (lam acc. lam namedExpr : (Name, Expr).
               match namedExpr with (id, e) then
-                TmLet {ident = id, tyBody = tyTm e, body = e, inexpr = acc,
-                       ty = tyTm acc, info = infoTm e}
+                TmLet {ident = id, tyAnnot = tyTm e, tyBody = tyTm e,
+                       body = e, inexpr = acc, ty = tyTm acc, info = infoTm e}
               else never)
             t
             exprs)
@@ -387,14 +387,14 @@ let t = preprocess (bindall_ [
 utest cse t with t using eqExpr in
 
 let t = preprocess (bindall_ [
-  type_ "Num" tyunknown_,
+  type_ "Num" [] (tyvariant_ []),
   condef_ "CInt" (tyarrow_ tyint_ (tycon_ "Num")),
   ulet_ "x" (int_ 4),
   ulet_ "y" (conapp_ "CInt" (var_ "x")),
   ulet_ "z" (conapp_ "CInt" (var_ "x")),
   var_ "y"]) in
 let expected = preprocess (bindall_ [
-  type_ "Num" tyunknown_,
+  type_ "Num" [] (tyvariant_ []),
   condef_ "CInt" (tyarrow_ tyint_ (tycon_ "Num")),
   ulet_ "x" (int_ 4),
   ulet_ "t" (conapp_ "CInt" (var_ "x")),

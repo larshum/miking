@@ -58,7 +58,10 @@ lang MExprEliminateDuplicateCode = MExprAst
   sem lookupDefinition env replaced id info inexpr =
   | elsfn ->
     let definition = toDefinition id info in
-    match mapLookup definition env.defIds with Some prevId then
+    -- NOTE(larshum, 2022-10-28): All definitions containing NoInfo are
+    -- considered not to be equal. This prevents eliminating code generated as
+    -- part of the compilation.
+    match (info, mapLookup definition env.defIds) with (!NoInfo _, Some prevId) then
       let env = {env with replace = mapInsert id prevId env.replace} in
       let replaced = mapInsert id prevId replaced in
       eliminateDuplicateCodeExpr env replaced inexpr
@@ -94,12 +97,13 @@ lang MExprEliminateDuplicateCode = MExprAst
     lookupDefinition
       env replaced t.ident t.info t.inexpr
       (lam env.
+        match eliminateDuplicateCodeType env replaced t.tyAnnot with (replaced, tyAnnot) in
         match eliminateDuplicateCodeType env replaced t.tyBody with (replaced, tyBody) in
         match eliminateDuplicateCodeExpr env replaced t.body with (replaced, body) in
         match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
         match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
         ( replaced
-        , TmLet {t with body = body, tyBody = tyBody, inexpr = inexpr, ty = ty} ))
+        , TmLet {t with body = body, tyAnnot = tyAnnot, tyBody = tyBody, inexpr = inexpr, ty = ty} ))
   | TmType t ->
     lookupDefinition
       env replaced t.ident t.info t.inexpr
@@ -140,9 +144,10 @@ lang MExprEliminateDuplicateCode = MExprAst
         ((replaced, env), Some binding)
     in
     let eliminateDuplicateBody = lam env. lam replaced. lam binding.
+      match eliminateDuplicateCodeType env replaced binding.tyAnnot with (replaced, tyAnnot) in
       match eliminateDuplicateCodeType env replaced binding.tyBody with (replaced, tyBody) in
       match eliminateDuplicateCodeExpr env replaced binding.body with (replaced, body) in
-      (replaced, {binding with body = body, tyBody = tyBody})
+      (replaced, {binding with body = body, tyAnnot = tyAnnot, tyBody = tyBody})
     in
     match mapAccumL eliminateDuplicateBinding (replaced, env) (reverse t.bindings)
     with ((replaced, env), optBindings) in
@@ -155,6 +160,7 @@ lang MExprEliminateDuplicateCode = MExprAst
   | t ->
     match smapAccumL_Expr_Expr (eliminateDuplicateCodeExpr env) replaced t with (replaced, t) in
     match smapAccumL_Expr_Type (eliminateDuplicateCodeType env) replaced t with (replaced, t) in
+    match smapAccumL_Expr_TypeLabel (eliminateDuplicateCodeType env) replaced t with (replaced, t) in
     match smapAccumL_Expr_Pat (eliminateDuplicateCodePat env) replaced t with (replaced, t) in
     match eliminateDuplicateCodeType env replaced (tyTm t) with (replaced, tmTy) in
     (replaced, withType tmTy t)
@@ -214,7 +220,7 @@ utest eliminateDuplicateCode t with expected using eqExpr in
 
 -- Tests that it works for types
 let optionDef = bindall_ [
-  withInfo (i 1) (type_ "Option" tyunknown_),
+  withInfo (i 1) (type_ "Option" ["a"] (tyvariant_ [])),
   withInfo (i 2) (condef_ "Some" (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyapp_ (tycon_ "Option") (tyvar_ "a"))))),
   withInfo (i 3) (condef_ "None" (tyall_ "a" (tyarrow_ tyunit_ (tyapp_ (tycon_ "Option") (tyvar_ "a")))))] in
 let fDef =
@@ -252,7 +258,7 @@ utest expr2str (eliminateDuplicateCode t) with expr2str expected using eqString 
 -- Tests that it applies to bindings in recursive let-expressions
 let ireclets = lam bindings.
   let bindFn = lam idx. lam entry : (String, Expr).
-    {ident = nameNoSym entry.0, tyBody = tyunknown_, body = entry.1, info = i idx} in
+    {ident = nameNoSym entry.0, tyAnnot = tyunknown_, tyBody = tyunknown_, body = entry.1, info = i idx} in
   TmRecLets { bindings = mapi bindFn bindings, inexpr = uunit_,
               ty = tyunknown_, info = NoInfo () } in
 let baseBindings = [
@@ -296,5 +302,14 @@ let expected = symbolize (bindall_ [optionDef, t1, t2]) in
 match eliminateDuplicateCodeWithSummary t with (summary, t) in
 utest expr2str t with expr2str expected using eqString in
 utest mapSize summary with 3 using eqi in
+
+-- Test that it does not eliminate bindings with the same identifier string if
+-- they have no info-fields.
+let t = bindall_ [
+  ulet_ "t" (addi_ (int_ 2) (int_ 3)),
+  ulet_ "t" (addi_ (int_ 4) (var_ "t")),
+  var_ "t"
+] in
+utest eliminateDuplicateCode t with t using eqExpr in
 
 ()

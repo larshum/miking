@@ -15,6 +15,7 @@ include "builtin.mc"
 include "info.mc"
 include "error.mc"
 include "pprint.mc"
+include "type.mc"
 
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --
@@ -26,7 +27,7 @@ type SymEnv = {
   varEnv: Map String Name,
   conEnv: Map String Name,
   tyVarEnv: Map String (Name, Level),
-  tyConEnv: Map String Name,
+  tyConEnv: Map String (Name, [Name], Type),
   currentLvl : Level,
   strictTypeVars: Bool,
   allowFree: Bool,
@@ -39,8 +40,11 @@ let symEnvEmpty = {
   tyVarEnv = mapEmpty cmpString,
 
   -- Built-in type constructors
-  tyConEnv = mapFromSeq cmpString (
-    map (lam t: (String, [String]). (t.0, nameNoSym t.0)) builtinTypes
+  tyConEnv =
+  mapFromSeq cmpString (
+    map (lam t: (String, [String]).
+      (t.0, (nameNoSym t.0, map nameSym t.1, tyvariant_ [])))
+      builtinTypes
   ),
 
   currentLvl = 1,
@@ -123,20 +127,23 @@ lang LamSym = Sym + LamAst + VarSym
   | TmLam t ->
     match env with {varEnv = varEnv} then
       let ty = symbolizeType env t.ty in
+      let tyAnnot = symbolizeType env t.tyAnnot in
       let tyIdent = symbolizeType env t.tyIdent in
       if nameHasSym t.ident then
-        TmLam {{{t with tyIdent = tyIdent}
-                   with body = symbolizeExpr env t.body}
-                   with ty = ty}
+        TmLam {t with tyAnnot = tyAnnot,
+                      tyIdent = tyIdent,
+                      body = symbolizeExpr env t.body,
+                      ty = ty}
       else
         let ident = nameSetNewSym t.ident in
         let str = nameGetStr ident in
         let varEnv = mapInsert str ident varEnv in
         let env = {env with varEnv = varEnv} in
-        TmLam {{{{t with ident = ident}
-                    with tyIdent = tyIdent}
-                    with body = symbolizeExpr env t.body}
-                    with ty = ty}
+        TmLam {t with ident = ident,
+                      tyAnnot = tyAnnot,
+                      tyIdent = tyIdent,
+                      body = symbolizeExpr env t.body,
+                      ty = ty}
     else never
 end
 
@@ -144,10 +151,11 @@ lang LetSym = Sym + LetAst + AllTypeAst
   sem symbolizeExpr (env : SymEnv) =
   | TmLet t ->
     match env with {varEnv = varEnv} then
+      let tyAnnot = symbolizeType env t.tyAnnot in
       let tyBody = symbolizeType env t.tyBody in
       let ty = symbolizeType env t.ty in
       let body =
-        match stripTyAll tyBody with (vars, _) in
+        match stripTyAll tyAnnot with (vars, _) in
         let tyVarEnv =
           foldr (lam v: (Name, VarSort).
               mapInsert (nameGetStr v.0) (v.0, env.currentLvl))
@@ -156,20 +164,22 @@ lang LetSym = Sym + LetAst + AllTypeAst
                             with currentLvl = addi 1 env.currentLvl} t.body
       in
       if nameHasSym t.ident then
-        TmLet {{{{t with tyBody = tyBody}
-                    with body = body}
-                    with inexpr = symbolizeExpr env t.inexpr}
-                    with ty = ty}
+        TmLet {t with tyAnnot = tyAnnot,
+                      tyBody = tyBody,
+                      body = body,
+                      inexpr = symbolizeExpr env t.inexpr,
+                      ty = ty}
       else
         let ident = nameSetNewSym t.ident in
         let str = nameGetStr ident in
         let varEnv = mapInsert str ident varEnv in
         let env = {env with varEnv = varEnv} in
-        TmLet {{{{{t with ident = ident}
-                     with tyBody = tyBody}
-                     with body = body}
-                     with inexpr = symbolizeExpr env t.inexpr}
-                     with ty = ty}
+        TmLet {t with ident = ident,
+                      tyAnnot = tyAnnot,
+                      tyBody = tyBody,
+                      body = body,
+                      inexpr = symbolizeExpr env t.inexpr,
+                      ty = ty}
     else never
 
   sem addTopNames (env : SymEnv) =
@@ -223,7 +233,7 @@ lang TypeSym = Sym + TypeAst
       let tyIdent = symbolizeType paramEnv t.tyIdent in
       let ident = nameSetNewSym t.ident in
       let str = nameGetStr ident in
-      let tyConEnv = mapInsert str ident tyConEnv in
+      let tyConEnv = mapInsert str (ident, params, tyIdent) tyConEnv in
       let env = {env with tyConEnv = tyConEnv} in
       TmType {{{{{t with ident = ident}
                     with params = params}
@@ -234,7 +244,7 @@ lang TypeSym = Sym + TypeAst
   sem addTopNames (env : SymEnv) =
   | TmType t ->
     let str = nameGetStr t.ident in
-    let tyConEnv = mapInsert str t.ident env.tyConEnv in
+    let tyConEnv = mapInsert str (t.ident, t.params, t.tyIdent) env.tyConEnv in
     addTopNames {env with tyConEnv = tyConEnv} t.inexpr
 end
 
@@ -261,16 +271,18 @@ lang RecLetsSym = Sym + RecLetsAst + AllTypeAst
     -- Symbolize all bodies with the new environment
     let bindings =
       map (lam bind : RecLetBinding.
+        let tyAnnot = symbolizeType env bind.tyAnnot in
         let tyBody = symbolizeType env bind.tyBody in
-        match stripTyAll tyBody with (vars, _) in
+        match stripTyAll tyAnnot with (vars, _) in
         let tyVarEnv =
           foldr (lam v: (Name, VarSort).
               mapInsert (nameGetStr v.0) (v.0, env.currentLvl))
             env.tyVarEnv vars in
-        {{bind with body = symbolizeExpr
-                             {{env with tyVarEnv = tyVarEnv}
-                                   with currentLvl = addi 1 env.currentLvl} bind.body}
-               with tyBody = tyBody})
+        {bind with body = symbolizeExpr
+                            {{env with tyVarEnv = tyVarEnv}
+                                  with currentLvl = addi 1 env.currentLvl} bind.body,
+                   tyAnnot = tyAnnot,
+                   tyBody = tyBody})
         bindings in
 
     TmRecLets {{t with bindings = bindings}
@@ -360,21 +372,54 @@ lang VariantTypeSym = VariantTypeAst
     else errorSingle [t.info] "Symbolizing non-empty variant types not yet supported"
 end
 
-lang ConTypeSym = ConTypeAst + UnknownTypeAst
+lang ConAppTypeSym = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
+  UnknownTypeAst + VarTypeSubstitute + AppTypeGetArgs
   sem symbolizeType (env : SymEnv) =
-  | TyCon t & ty ->
-    match env with {tyConEnv = tyConEnv} then
-      if nameHasSym t.ident then ty
+  | (TyCon _ | TyApp _) & ty ->
+    let mkAppTy =
+      foldl (lam ty1. lam ty2.
+        TyApp {info = mergeInfo (infoTy ty1) (infoTy ty2), lhs = ty1, rhs = ty2})
+    in
+    match getTypeArgs ty with (constr, args) in
+    let args = map (symbolizeType env) args in
+    match constr with TyCon t then
+      if nameHasSym t.ident then mkAppTy (TyCon t) args
       else
         let str = nameGetStr t.ident in
-        match mapLookup str tyConEnv with Some ident then
-          TyCon {t with ident = ident}
-        else if env.strictTypeVars then
-          if env.allowFree then TyCon t
-          else errorSingle [t.info] (concat "Unknown type constructor in symbolizeExpr: " str)
+        match mapLookup str env.tyConEnv with Some (ident, params, def) then
+          let conTy = TyCon {t with ident = ident} in
+          let appTy = mkAppTy conTy args in
+          let isAlias =
+            match def with TyVariant r then not (mapIsEmpty r.constrs) else true
+          in
+          if isAlias then
+            match (length params, length args) with (paramLen, argLen) in
+            if eqi paramLen argLen then
+              let subst = foldl2 (lam s. lam v. lam t. mapInsert v t s)
+                            (mapEmpty nameCmp) params args
+              in
+              TyAlias {display = appTy, content = substituteVars subst def}
+            else
+              errorSingle [infoTy ty] (join [
+                "* Encountered a misformed type alias.\n",
+                "* Type ", str, " is declared to have ",
+                int2string paramLen, " parameters.\n",
+                "* Found ", int2string argLen, " arguments.\n",
+                "* When symbolizing the type"
+              ])
+          else
+            appTy
         else
-          TyUnknown {info = t.info}
-    else never
+          if env.strictTypeVars then
+            if env.allowFree then TyCon t
+            else errorSingle [t.info] (join [
+              "* Encountered an unknown type constructor: ", str, "\n",
+              "* When symbolizing the type"
+            ])
+          else
+            TyUnknown {info = t.info}
+    else
+      mkAppTy (symbolizeType env constr) args
 end
 
 lang VarTypeSym = VarTypeAst + UnknownTypeAst
@@ -499,7 +544,7 @@ lang MExprSym =
   MatchSym +
 
   -- Non-default implementations (Types)
-  VariantTypeSym + ConTypeSym + VarTypeSym + AllTypeSym +
+  VariantTypeSym + ConAppTypeSym + VarTypeSym + AllTypeSym +
 
   -- Non-default implementations (Patterns)
   NamedPatSym + SeqEdgePatSym + DataPatSym + NotPatSym
@@ -526,8 +571,8 @@ let rec = urecord_ [("k1", base), ("k2", (int_ 1)), ("k3", (int_ 2))] in
 let letin = bind_ (ulet_ "x" rec) (app_ (var_ "x") base) in
 
 let lettypein = bindall_ [
-  type_ "Type" tystr_,
-  type_ "Type" (tycon_ "Type"),
+  type_ "Type" [] tystr_,
+  type_ "Type" [] (tycon_ "Type"),
   lam_ "Type" (tycon_ "Type") (var_ "Type")
 ] in
 

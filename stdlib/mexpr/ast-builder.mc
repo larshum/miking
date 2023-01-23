@@ -79,6 +79,10 @@ let tyapp_ = use AppTypeAst in
   lam lhs. lam rhs.
   TyApp {lhs = lhs, rhs = rhs, info = NoInfo ()}
 
+let tyalias_ = use AliasTypeAst in
+  lam display. lam content.
+  TyAlias {display = display, content = content}
+
 let ntycon_ = use ConTypeAst in
   lam n.
   TyCon {ident = n, info = NoInfo ()}
@@ -111,23 +115,6 @@ let tyall_ = use VarSortAst in
 let tyalls_ =
   lam strs. lam ty.
   foldr tyall_ ty strs
-
-let tyFlexUnbound = use FlexTypeAst in
-  lam info. lam ident. lam level. lam sort. lam isWeak.
-  TyFlex {info = info,
-          contents = ref (Unbound {ident = ident,
-                                   level = level,
-                                   sort = sort,
-                                   isWeak = isWeak})}
-
-let tyflexunbound_ = use FlexTypeAst in
-  lam s.
-  tyFlexUnbound (NoInfo ()) (nameNoSym s) 0 (PolyVar ()) true
-
-let tyflexlink_ = use FlexTypeAst in
-  lam ty.
-  TyFlex {info = NoInfo (),
-          contents = ref (Link ty)}
 
 -- Tensor OP types
 let tytensorcreateuninitint_ =
@@ -350,7 +337,7 @@ let unit_ = use MExprAst in
 
 let nlet_ = use MExprAst in
   lam n. lam ty. lam body.
-  TmLet {ident = n, tyBody = ty, body = body,
+  TmLet {ident = n, tyAnnot = ty, tyBody = ty, body = body,
   inexpr = uunit_, ty = tyunknown_, info = NoInfo ()}
 
 let let_ = use MExprAst in
@@ -375,17 +362,18 @@ let ext_ = use MExprAst in
   next_ (nameNoSym s) e ty
 
 let ntype_ = use MExprAst in
-  lam n. lam ty.
-  TmType {ident = n, tyIdent = ty, params = [], ty = tyunknown_, inexpr = uunit_, info = NoInfo ()}
+  lam n. lam params. lam ty.
+  TmType {ident = n, tyIdent = ty, params = params, ty = tyunknown_, inexpr = uunit_, info = NoInfo ()}
 
 let type_ = use MExprAst in
-  lam s. lam ty.
-  ntype_ (nameNoSym s) ty
+  lam s. lam params. lam ty.
+  ntype_ (nameNoSym s) (map nameNoSym params) ty
 
 let nreclets_ = use MExprAst in
   lam bs.
   let bindingMapFunc = lam t : (Name, Type, Expr).
     { ident = t.0
+    , tyAnnot = t.1
     , tyBody = t.1
     , body = t.2
     , info = NoInfo ()
@@ -429,7 +417,7 @@ let reclets_empty = use MExprAst in
 let nreclets_add = use MExprAst in
   lam n. lam ty. lam body. lam reclets.
   match reclets with TmRecLets t then
-    let newbind = {ident = n, tyBody = ty, body = body, info = NoInfo ()} in
+    let newbind = {ident = n, tyAnnot = ty, tyBody = ty, body = body, info = NoInfo ()} in
     TmRecLets {t with bindings = cons newbind t.bindings}
   else
     errorSingle [infoTm reclets] "reclets is not a TmRecLets construct"
@@ -494,11 +482,12 @@ let tmLam = use MExprAst in
   lam info : Info.
   lam ty : Type.
   lam ident : Name.
-  lam tyIdent : Type.
+  lam tyAnnot : Type.
   lam body : Expr.
   TmLam {
     ident = ident,
-    tyIdent = tyIdent,
+    tyAnnot = tyAnnot,
+    tyIdent = tyAnnot,
     ty = ty,
     body = body,
     info = info

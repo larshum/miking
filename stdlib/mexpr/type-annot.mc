@@ -111,13 +111,9 @@ lang VarCompatibleType = CompatibleType + VarTypeAst + UnknownTypeAst
   | TyVar {info = i} -> TyUnknown {info = i}
 end
 
-lang FlexCompatibleType = CompatibleType + FlexTypeAst + UnknownTypeAst
-  sem reduceTyVar =
-  | TyFlex {info = i} & ty ->
-    match resolveLink ty with ! TyFlex _ & ty then
-      reduceTyVar ty
-    else
-      TyUnknown {info = i}
+lang AliasCompatibleType = CompatibleType + AliasTypeAst
+  sem reduceType (tyEnv : Map Name Type) =
+  | TyAlias t -> Some t.content
 end
 
 lang AllCompatibleType = CompatibleType + AllTypeAst
@@ -274,9 +270,9 @@ lang LamTypeAnnot = TypeAnnot + LamAst + FunTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmLam t ->
     match env with {varEnv = varEnv} then
-      let env = {env with varEnv = mapInsert t.ident t.tyIdent varEnv} in
+      let env = {env with varEnv = mapInsert t.ident t.tyAnnot varEnv} in
       let body = typeAnnotExpr env t.body in
-      let ty = ityarrow_ t.info t.tyIdent (tyTm body) in
+      let ty = ityarrow_ t.info t.tyAnnot (tyTm body) in
       TmLam {{t with body = body}
                 with ty = ty}
     else never
@@ -291,22 +287,23 @@ lang LetTypeAnnot = TypeAnnot + TypePropagation + LetAst +  UnknownTypeAst + All
   sem typeAnnotExpr (env : TypeEnv) =
   | TmLet t ->
     match env with {varEnv = varEnv, tyEnv = tyEnv} then
-      let body = match t.tyBody with TyUnknown _ then t.body else
-        match stripTyAll t.tyBody with (_, tyBody) in
-        propagateExpectedType tyEnv (tyBody, t.body) in
+      let body = match t.tyAnnot with TyUnknown _ then t.body else
+        match inspectType t.tyAnnot with tyAnnot in
+        propagateExpectedType tyEnv (tyAnnot, t.body) in
       let body = typeAnnotExpr env body in
-      match compatibleType tyEnv t.tyBody (tyTm body) with Some tyBody then
+      match compatibleType tyEnv t.tyAnnot (tyTm body) with Some tyBody then
         let env = {env with varEnv = mapInsert t.ident tyBody varEnv} in
         let inexpr = typeAnnotExpr env t.inexpr in
-        TmLet {{{{t with tyBody = tyBody}
-                    with body = withType tyBody body}
-                    with inexpr = inexpr}
-                    with ty = tyTm inexpr}
+        TmLet {t with tyAnnot = tyBody,
+                      tyBody = tyBody,
+                      body = withType tyBody body,
+                      inexpr = inexpr,
+                      ty = tyTm inexpr}
       else
         let msg = join [
           "Inconsistent type annotation of let-expression\n",
           "Expected type: ", _pprintType (tyTm body), "\n",
-          "Annotated type: ", _pprintType t.tyBody
+          "Annotated type: ", _pprintType t.tyAnnot
         ] in
         errorSingle [t.info] msg
     else never
@@ -325,14 +322,15 @@ end
 lang PropagateArrowLambda = TypePropagation + FunTypeAst + LamAst
   sem propagateExpectedType (tyEnv : Map Name Type) =
   | (TyArrow {from = from, to = to}, TmLam t) ->
-    match compatibleType tyEnv from t.tyIdent with Some ty then
-      TmLam {{t with tyIdent = ty}
-                with body = propagateExpectedType tyEnv (to, t.body)}
+    match compatibleType tyEnv from t.tyAnnot with Some ty then
+      TmLam {t with tyAnnot = ty,
+                    tyIdent = ty,
+                    body = propagateExpectedType tyEnv (to, t.body)}
     else
       let msg = join [
         "Inconsistent type annotation of let-expression and lambda\n",
         "Type from let: ", _pprintType from, "\n",
-        "Type from lambda: ", _pprintType t.tyIdent
+        "Type from lambda: ", _pprintType t.tyAnnot
       ] in
       errorSingle [t.info] msg
 end
@@ -355,31 +353,32 @@ lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsAst + LamAst + Unkn
     -- annotations of the bindings. This is to make annotations work for
     -- mutually recursive functions, given correct type annotations.
     let foldBindingInit = lam acc. lam binding : RecLetBinding.
-      mapInsert binding.ident binding.tyBody acc
+      mapInsert binding.ident binding.tyAnnot acc
     in
     -- Add mapping from binding identifier to the inferred type.
     let foldBindingAfter = lam acc. lam binding : RecLetBinding.
-      mapInsert binding.ident binding.tyBody acc
+      mapInsert binding.ident binding.tyAnnot acc
     in
     let annotBinding = lam env : TypeEnv. lam binding : RecLetBinding.
-      let body = match binding.tyBody with TyUnknown _ then binding.body else
-        match stripTyAll binding.tyBody with (_, tyBody) in
-        propagateExpectedType env.tyEnv (tyBody, binding.body) in
+      let body = match binding.tyAnnot with TyUnknown _ then binding.body else
+        match inspectType binding.tyAnnot with tyAnnot in
+        propagateExpectedType env.tyEnv (tyAnnot, binding.body) in
       let body = typeAnnotExpr env body in
       match env with {tyEnv = tyEnv} then
         let tyBody =
-          match compatibleType tyEnv binding.tyBody (tyTm body) with Some tyBody then
+          match compatibleType tyEnv binding.tyAnnot (tyTm body) with Some tyBody then
             tyBody
           else
             let msg = join [
               "Inconsistent type annotation of recursive let-expression\n",
               "Expected type: ", _pprintType (tyTm body), "\n",
-              "Annotated type: ", _pprintType binding.tyBody
+              "Annotated type: ", _pprintType binding.tyAnnot
             ] in
             errorSingle [t.info] msg
         in
-        {{binding with body = body}
-                  with tyBody = tyBody}
+        {binding with body = body,
+                      tyAnnot = tyBody,
+                      tyBody = tyBody}
       else never
     in
     match env with {varEnv = varEnv} then
@@ -397,9 +396,7 @@ lang ConstTypeAnnot = TypeAnnot + MExprConstType + AllTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmConst t ->
     recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
-    match stripTyAll (f (tyConst t.val)) with (_, ty) then
-      TmConst {t with ty = ty}
-    else never
+    TmConst {t with ty = inspectType (f (tyConst t.val))}
 end
 
 lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
@@ -458,7 +455,7 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
     match env with {conEnv = conEnv, tyEnv = tyEnv} then
       let ty =
         match mapLookup t.ident conEnv with Some lty then
-          match stripTyAll lty with (_, TyArrow {from = from, to = to}) then
+          match inspectType lty with TyArrow {from = from, to = to} then
             recursive let tyvar = lam ty.
               match ty with TyCon _ then ty
               else match ty with TyApp t then tyvar t.lhs
@@ -616,7 +613,7 @@ end
 lang RecordPatTypeAnnot = TypeAnnot + RecordPat + UnknownTypeAst + RecordTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatRecord t ->
-    let expectedTy = typeUnwrapAlias env.tyEnv expectedTy in
+    let expectedTy = unwrapType expectedTy in
     let expectedTy = match expectedTy with TyUnknown _ | TyApp {lhs = TyUnknown _} then t.ty else expectedTy in
     let expectedTy = match expectedTy with TyRecord _ then expectedTy else
       match (record2tuple t.bindings, mapLength t.bindings) with (Some _, length & !1) then
@@ -646,8 +643,8 @@ lang DataPatTypeAnnot = TypeAnnot + DataPat + VariantTypeAst + ConTypeAst +
                         FunTypeAst + AllTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatCon t ->
-    match optionMap stripTyAll (mapLookup t.ident env.conEnv)
-    with Some (_, TyArrow {from = argTy, to = to}) then
+    match optionMap inspectType (mapLookup t.ident env.conEnv)
+    with Some (TyArrow {from = argTy, to = to}) then
       match typeAnnotPat env argTy t.subpat with (env, subpat) then
         (env, PatCon {{t with subpat = subpat} with ty = to})
       else never
@@ -705,7 +702,7 @@ lang MExprTypeAnnot =
   FunCompatibleType + SeqCompatibleType + TensorCompatibleType +
   RecordCompatibleType + VariantCompatibleType + AppCompatibleType +
   PropagateArrowLambda + PropagateLetType + VarCompatibleType +
-  FlexCompatibleType + AllCompatibleType +
+  AllCompatibleType + AliasCompatibleType +
 
   -- Terms
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
@@ -824,11 +821,11 @@ utest tyTm record with expectedRecordType using eqType in
 let recordUpdate = typeAnnot (recordupdate_ record "x" (int_ 1)) in
 utest tyTm recordUpdate with expectedRecordType using eqType in
 
-let typeDecl = bind_ (ntype_ n tyunknown_) uunit_ in
+let typeDecl = bind_ (ntype_ n [] tyunknown_) uunit_ in
 utest tyTm (typeAnnot typeDecl) with tyunit_ using eqType in
 
 let conApp = bindall_ [
-  ntype_ n tyunknown_,
+  ntype_ n [] tyunknown_,
   ncondef_ x (tyarrow_ tyint_ (ntycon_ n)),
   nconapp_ x (int_ 4)
 ] in
@@ -880,7 +877,7 @@ let matchSeq = bindall_ [
 utest tyTm (typeAnnot (symbolize matchSeq)) with tyseq_ tystr_ using eqType in
 
 let matchTree = bindall_ [
-  type_ "Tree" tyunknown_,
+  type_ "Tree" [] (tyvariant_ []),
   condef_ "Branch" (tyarrow_ (tytuple_ [tycon_ "Tree", tycon_ "Tree"]) (tycon_ "Tree")),
   condef_ "Leaf" (tyarrow_ (tyseq_ tyint_) (tycon_ "Tree")),
   ulet_ "t" (conapp_ "Branch" (utuple_ [

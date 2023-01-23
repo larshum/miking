@@ -413,22 +413,6 @@ lang VarSortCmp = Cmp + VarSortAst
     subi (constructorTag lhs) (constructorTag rhs)
 end
 
-lang FlexTypeCmp = VarSortCmp + FlexTypeAst
-  sem cmpTypeH =
-  | (TyFlex _ & lhs, rhs)
-  | (lhs, TyFlex _ & rhs) ->
-    match (resolveLink lhs, resolveLink rhs) with (lhs, rhs) in
-    match (lhs, rhs) with (TyFlex t1, TyFlex t2) then
-      match (deref t1.contents, deref t2.contents) with (Unbound n1, Unbound n2) in
-      let identDiff = nameCmp n1.ident n2.ident in
-      if eqi identDiff 0 then
-        cmpVarSort (n1.sort, n2.sort)
-      else
-        identDiff
-    else match (lhs, rhs) with (! TyFlex _, ! TyFlex _) then cmpType lhs rhs
-    else subi (constructorTag lhs) (constructorTag rhs)
-end
-
 lang AllTypeCmp = VarSortCmp + AllTypeAst
   sem cmpTypeH =
   | (TyAll t1, TyAll t2) ->
@@ -447,6 +431,12 @@ lang AppTypeCmp = Cmp + AppTypeAst
     let lhsDiff = cmpType t1.lhs t2.lhs in
     if eqi lhsDiff 0 then cmpType t1.rhs t2.rhs
     else lhsDiff
+end
+
+lang AliasTypeCmp = Cmp + AliasTypeAst
+  sem cmpTypeH =
+  | (TyAlias t1, ty2) -> cmpTypeH (t1.content, ty2)
+  | (ty1 & !TyAlias _, TyAlias t2) -> cmpTypeH (ty1, t2.content)
 end
 
 --------------------
@@ -469,7 +459,7 @@ lang MExprCmp =
   -- Types
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
-  ConTypeCmp + VarTypeCmp + FlexTypeCmp + AppTypeCmp + AllTypeCmp
+  ConTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp + AliasTypeCmp
 end
 
 -----------
@@ -533,9 +523,9 @@ utest cmpExpr (recordupdate_ r "a" (int_ 0))
 utest cmpExpr (recordupdate_ r "b" (int_ 0))
               (recordupdate_ r "a" (int_ 1)) with 0 using neqi in
 
-utest cmpExpr (type_ "a" tyint_) (type_ "a" tyint_) with 0 in
-utest cmpExpr (type_ "b" tyint_) (type_ "a" tyint_) with 0 using neqi in
-utest cmpExpr (type_ "a" tyfloat_) (type_ "a" tyint_) with 0 using neqi in
+utest cmpExpr (type_ "a" [] tyint_) (type_ "a" [] tyint_) with 0 in
+utest cmpExpr (type_ "b" [] tyint_) (type_ "a" [] tyint_) with 0 using neqi in
+utest cmpExpr (type_ "a" [] tyfloat_) (type_ "a" [] tyint_) with 0 using neqi in
 
 utest cmpExpr (condef_ "a" tyint_) (condef_ "a" tyint_) with 0 in
 utest cmpExpr (condef_ "b" tyint_) (condef_ "a" tyint_) with 0 using neqi in
@@ -856,9 +846,7 @@ utest cmpType (tyall_ "a" tybool_) (tyall_ "a" tybool_) with 0 in
 utest cmpType (tyall_ "a" tybool_) (tyall_ "a" tyfloat_) with 0 using neqi in
 utest cmpType (tyall_ "a" tybool_) (tyall_ "b" tybool_) with 0 using neqi in
 
-utest cmpType (tyflexunbound_ "a") (tyflexunbound_ "a") with 0 in
-utest cmpType (tyflexunbound_ "a") (tyflexunbound_ "b") with 0 using neqi in
-utest cmpType (tyflexlink_ (tyvar_ "a")) (tyvar_ "a") with 0 in
-utest cmpType (tyflexlink_ (tyvar_ "a")) (tyvar_ "b") with 0 using neqi in
+utest cmpType (tyalias_ (tycon_ "t") tyint_) tyint_ with 0 in
+utest cmpType (tyalias_ (tycon_ "t") tybool_) tyint_ with 0 using neqi in
 
 ()

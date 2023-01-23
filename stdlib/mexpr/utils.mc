@@ -26,12 +26,14 @@ lang MExprSubstitute = MExprAst
                      ty = substituteIdentifiersType replacements t.ty}
   | TmLet t ->
     TmLet {t with ident = subIdent replacements t.ident,
+                  tyAnnot = substituteIdentifiersType replacements t.tyAnnot,
                   tyBody = substituteIdentifiersType replacements t.tyBody,
                   body = substituteIdentifiersExpr replacements t.body,
                   inexpr = substituteIdentifiersExpr replacements t.inexpr,
                   ty = substituteIdentifiersType replacements t.ty}
   | TmLam t ->
     TmLam {t with ident = subIdent replacements t.ident,
+                  tyAnnot = substituteIdentifiersType replacements t.tyAnnot,
                   tyIdent = substituteIdentifiersType replacements t.tyIdent,
                   body = substituteIdentifiersExpr replacements t.body,
                   ty = substituteIdentifiersType replacements t.ty}
@@ -54,6 +56,7 @@ lang MExprSubstitute = MExprAst
     let subBinding = lam bind.
       {bind with ident = subIdent replacements bind.ident,
                  body = substituteIdentifiersExpr replacements bind.body,
+                 tyAnnot = substituteIdentifiersType replacements bind.tyAnnot,
                  tyBody = substituteIdentifiersType replacements bind.tyBody}
     in
     TmRecLets {t with bindings = map subBinding t.bindings,
@@ -62,6 +65,7 @@ lang MExprSubstitute = MExprAst
   | ast ->
     let ast = smap_Expr_Expr (substituteIdentifiersExpr replacements) ast in
     let ast = smap_Expr_Type (substituteIdentifiersType replacements) ast in
+    let ast = smap_Expr_TypeLabel (substituteIdentifiersType replacements) ast in
     let ast = smap_Expr_Pat (substituteIdentifiersPat replacements) ast in
     withType (substituteIdentifiersType replacements (tyTm ast)) ast
 
@@ -97,6 +101,13 @@ lang MExprFindSym = MExprAst
         (mapFromSeq cmpString (mapi (lam i. lam x. (x, i)) strs))
         (mapEmpty subi) t in
     create (length strs) (lam i. mapLookup i result)
+
+  sem findName : String -> Expr -> Option Name
+  sem findName str =
+  | t ->
+    match findNamesOfStrings [str] t with [Some id] then
+      Some id
+    else None ()
 
   sem findNamesOfStringsExpr : Map String Int -> Map Int Name -> Expr -> Map Int Name
   sem findNamesOfStringsExpr strs acc =
@@ -150,7 +161,7 @@ let pp = lam e. mexprToString e in
 let expr = lam id. bindall_ [
   ulet_ id (ulam_ id (var_ id)),
   ureclets_ [(id, var_ id)],
-  type_ id (tyapp_ (tycon_ id) tyint_),
+  type_ id [] (tyapp_ (tycon_ id) tyint_),
   condef_ id (tyarrow_ tyint_ (tycon_ id)),
   ext_ id false tyunknown_,
   conapp_ id (int_ 2)

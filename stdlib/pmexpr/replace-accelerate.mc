@@ -29,10 +29,10 @@ lang PMExprReplaceAccelerate =
   sem _mexprToOCamlType (env : GenerateEnv) (acc : [Top]) =
   | ty & (TyCon {info = info, ident = ident}) ->
     let unwrapType = lam ty.
-      let ty = typeUnwrapAlias env.aliases ty in
+      let ty = unwrapType ty in
       match ty with TyCon {ident = ident} then
         match mapLookup ident env.constrs with Some ty then
-         ty
+          ty
         else ty
       else ty
     in
@@ -58,8 +58,8 @@ lang PMExprReplaceAccelerate =
             -- NOTE(larshum, 2022-03-17): We explicitly use the label escaping
             -- of the OCaml pretty-printer to ensure the labels of the fields
             -- match.
+            let asStr = pprintLabelString sid in
             let str = sidToString sid in
-            let asStr = pprintLabelString str in
             (acc, {label = asStr, asLabel = str, ty = ty}))
           acc (tyRecordOrderedLabels ty)
       with (acc, ocamlTypedFields) in
