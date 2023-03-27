@@ -19,7 +19,7 @@ lang PreToken = TokenParser
   sem tokReprToStr =
   | PreRepr x -> join ["<", nameGetStr x.constructorName, ">"]
 
-  sem tokReprCompare =
+  sem tokReprCompare2 =
   | (PreRepr l, PreRepr r) -> nameCmp l.constructorName r.constructorName
 end
 
@@ -36,7 +36,7 @@ lang PreLitToken = TokenParser
   sem tokReprToStr =
   | PreLitRepr x -> snoc (cons '\'' x.lit) '\''
 
-  sem tokReprCompare =
+  sem tokReprCompare2 =
   | (PreLitRepr l, PreLitRepr r) -> cmpString l.lit r.lit
 end
 
@@ -937,7 +937,7 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
           end
         in result.map (lam expr. (field, expr)) (result.map f exprs)
       in
-      let res = result.mapM mkField (mapBindings record) in
+      let res = result.mapM mkField (mapBindings (mapRemove "info" record)) in
       let res =
         match infos with Some infos then
           let infos = result.mapM identity infos in

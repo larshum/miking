@@ -44,6 +44,16 @@ lang SideEffect
     optionGetOrElse
       (lam. 0)
       (mapLookup id env.arityId)
+
+  sem exprHasSideEffectH : SideEffectEnv -> Bool -> Bool -> Expr -> Bool
+
+  sem exprHasSideEffect : SideEffectEnv -> Expr -> Bool
+  sem exprHasSideEffect env =
+  | t -> exprHasSideEffectH env true false t
+
+  sem hasSideEffect : Expr -> Bool
+  sem hasSideEffect =
+  | t -> exprHasSideEffect (sideEffectEnvEmpty ()) t
 end
 
 lang ConstSideEffect = MExprAst
@@ -72,11 +82,6 @@ lang ConstSideEffect = MExprAst
   | CWallTimeMs _ | CSleepMs _ -> true
   | CConstructorTag _ -> true
   | CRef _ | CModRef _ | CDeRef _ -> true
-  | CMapEmpty _ | CMapInsert _ | CMapRemove _ | CMapFindExn _
-  | CMapFindOrElse _ | CMapFindApplyOrElse _ | CMapBindings _ | CMapChooseExn _
-  | CMapChooseOrElse _ | CMapSize _ | CMapMem _ | CMapAny _ | CMapMap _
-  | CMapMapWithKey _ | CMapFoldWithKey _ | CMapEq _ | CMapCmp _
-  | CMapGetCmpFun _ -> true
   | CTensorCreateInt _ | CTensorCreateFloat _ | CTensorCreate _
   | CTensorGetExn _ | CTensorSetExn _
   | CTensorLinearGetExn _ | CTensorLinearSetExn _
@@ -94,13 +99,7 @@ end
 lang MExprSideEffect =
   SideEffect + ConstSideEffect + MExprAst + MExprArity + MExprCallGraph
 
-  sem hasSideEffect =
-  | t -> exprHasSideEffect (sideEffectEnvEmpty ()) t
-
-  sem exprHasSideEffect (env : SideEffectEnv) =
-  | t -> exprHasSideEffectH env true false t
-
-  sem exprHasSideEffectH (env : SideEffectEnv) (lambdaCounting : Bool) (acc : Bool) =
+  sem exprHasSideEffectH env lambdaCounting acc =
   | TmVar t ->
     if acc then true
     else if and lambdaCounting (geqi (identArity env t.ident) 1) then false

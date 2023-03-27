@@ -932,28 +932,6 @@ lang RefOpAst = ConstAst
   | CDeRef {}
 end
 
-lang MapAst = ConstAst
-  syn Const =
-  | CMapEmpty {}
-  | CMapInsert {}
-  | CMapRemove {}
-  | CMapFindExn {}
-  | CMapFindOrElse {}
-  | CMapFindApplyOrElse {}
-  | CMapBindings {}
-  | CMapChooseExn {}
-  | CMapChooseOrElse {}
-  | CMapSize {}
-  | CMapMem {}
-  | CMapAny {}
-  | CMapMap {}
-  | CMapMapWithKey {}
-  | CMapFoldWithKey {}
-  | CMapEq {}
-  | CMapCmp {}
-  | CMapGetCmpFun {}
-end
-
 lang TensorOpAst = ConstAst
   syn Const =
   | CTensorCreateUninitInt {}
@@ -1543,7 +1521,8 @@ lang AliasTypeAst = AllTypeAst
   sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TyAlias t ->
     match f acc t.content with (acc, content) in
-    (acc, TyAlias {t with content = content})
+    match f acc t.display with (acc, display) in
+    (acc, TyAlias {t with content = content, display = display})
 
   sem rappAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TyAlias t -> f acc t.content
@@ -1571,8 +1550,8 @@ lang MExprAst =
   CmpIntAst + IntCharConversionAst + CmpFloatAst + CharAst + CmpCharAst +
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
-  FloatStringConversionAst + TimeAst + ConTagAst + RefOpAst + MapAst +
-  TensorOpAst + BootParserAst + UnsafeCoerceAst +
+  FloatStringConversionAst + TimeAst + ConTagAst + RefOpAst + TensorOpAst +
+  BootParserAst + UnsafeCoerceAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

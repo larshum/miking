@@ -1,0 +1,5 @@
+/out
+/jar
+out.json
+*.class
+/pkg

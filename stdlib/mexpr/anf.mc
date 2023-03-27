@@ -13,6 +13,7 @@ include "symbolize.mc"
 include "eq.mc"
 include "info.mc"
 include "error.mc"
+include "map.mc"
 
 lang ANF = LetAst + VarAst + UnknownTypeAst
 
@@ -38,7 +39,7 @@ lang ANF = LetAst + VarAst + UnknownTypeAst
     } in
     let inexpr = k var in
     TmLet {ident = ident,
-           tyAnnot = tyTm n,
+           tyAnnot = TyUnknown {info = infoTm n},
            tyBody = tyTm n,
            body = n,
            inexpr = inexpr,
@@ -117,16 +118,10 @@ lang RecordANF = ANF + RecordAst
 
   sem normalize (k : Expr -> Expr) =
   | TmRecord t ->
-    let acc = lam bs. k (TmRecord {t with bindings = bs}) in
-    let f =
-      (lam acc. lam k. lam e.
-         (lam bs.
-            normalizeName
-              (lam v. acc (mapInsert k v bs))
-              e))
-    in
-    let tmp = mapFoldWithKey f acc t.bindings in
-    tmp (mapEmpty (mapGetCmpFun t.bindings))
+    mapMapK
+      (lam e. lam k. normalizeName k e)
+      t.bindings
+      (lam bs. k (TmRecord {t with bindings = bs}))
 
   | TmRecordUpdate t ->
     normalizeName
@@ -242,15 +237,7 @@ lang SeqANF = ANF + SeqAst
 
   sem normalize (k : Expr -> Expr) =
   | TmSeq t ->
-    let acc = lam ts. k (TmSeq {t with tms = ts}) in
-    let f =
-      (lam acc. lam e.
-         (lam ts.
-            normalizeName
-              (lam v. acc (cons v ts))
-              e))
-    in
-    (foldl f acc t.tms) []
+    mapK (lam e. lam k. normalizeName k e) t.tms (lam ts. k (TmSeq {t with tms = ts}))
 
 end
 
@@ -320,14 +307,15 @@ lang ExtANF = ANF + ExtAst + FunTypeAst + UnknownTypeAst + LamAst + AppAst
         (lam v. lam acc.
           match v with (id, ty) in
           TmLam {
-            ident = id, tyAnnot = ty, tyIdent = ty, body = acc,
-            ty = TyArrow {from = ty, to = tyTm acc, info = t.info},
+            ident = id, tyAnnot = TyUnknown {info = t.info}, tyIdent = ty,
+            body = acc, ty = TyArrow {from = ty, to = tyTm acc, info = t.info},
             info = t.info})
         inner varNameTypes in
     TmExt { t with
       inexpr = TmLet {
-        ident = t.ident, tyAnnot = t.tyIdent, tyBody = t.tyIdent, body = etaExpansion,
-        inexpr = normalize k t.inexpr, ty = tyTm t.inexpr, info = t.info} }
+        ident = t.ident, tyAnnot = TyUnknown {info = t.info},
+        tyBody = t.tyIdent, body = etaExpansion, inexpr = normalize k t.inexpr,
+        ty = tyTm t.inexpr, info = t.info} }
 
 end
 
