@@ -169,26 +169,6 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   | CSplitAt _ & t -> intrinsicGen t args
   | CSubsequence _ & t -> intrinsicGen t args
 
-  -- Map operators (MapAst)
-  | CMapEmpty _ & t -> intrinsicGen t args
-  | CMapInsert _ & t -> intrinsicGen t args
-  | CMapRemove _ & t -> intrinsicGen t args
-  | CMapFindExn _ & t -> intrinsicGen t args
-  | CMapFindOrElse _ & t -> intrinsicGen t args
-  | CMapFindApplyOrElse _ & t -> intrinsicGen t args
-  | CMapBindings _ & t -> intrinsicGen t args
-  | CMapChooseExn _ & t -> intrinsicGen t args
-  | CMapChooseOrElse _ & t -> intrinsicGen t args
-  | CMapSize _ & t -> intrinsicGen t args
-  | CMapMem _ & t -> intrinsicGen t args
-  | CMapAny _ & t -> intrinsicGen t args
-  | CMapMap _ & t -> intrinsicGen t args
-  | CMapMapWithKey _ & t -> intrinsicGen t args
-  | CMapFoldWithKey _ & t -> intrinsicGen t args
-  | CMapEq _ & t -> intrinsicGen t args
-  | CMapCmp _ & t -> intrinsicGen t args
-  | CMapGetCmpFun _ & t -> intrinsicGen t args
-
   -- References
   | CRef _    & t -> intrinsicGen t args
   | CModRef _ & t -> intrinsicGen t args
@@ -240,8 +220,12 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   sem foldApp : CompileJSContext -> [JSExpr] -> Expr -> (CompileJSContext, Expr, [JSExpr])
   sem foldApp ctx acc =
   | TmApp { lhs = lhs, rhs = rhs } ->
-    match (if _isUnitTy (tyTm rhs) then (ctx, JSENop {})
-      else compileMExpr ctx rhs) with (ctx, e) in
+    match
+      match rhs with TmRecord {bindings = bindings} then
+        if mapIsEmpty bindings then (ctx, JSENop {})
+        else compileMExpr ctx rhs
+      else compileMExpr ctx rhs
+    with (ctx, e) in
     foldApp ctx (cons e acc) lhs
   | t -> (ctx, t, acc)
 

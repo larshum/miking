@@ -32,7 +32,7 @@ include "mexpr/type-check.mc"
 include "mexpr/utils.mc"
 
 let _utestRuntimeExpected = [
-  "numFailed", "utestRunner", "defaultPprint", "ppBool", "ppInt",
+  "utestRunner", "utestExitOnFailure", "defaultPprint", "ppBool", "ppInt",
   "ppFloat", "ppChar", "ppSeq", "eqBool", "eqInt", "eqFloat", "eqChar",
   "eqSeq", "join"
 ]
@@ -393,12 +393,12 @@ lang UtestRuntime = BootParser + MExprSym + MExprTypeCheck + MExprFindSym
         ids
       else error "Missing required identifiers in utest runtime file"
 
-  sem numFailedName : () -> Name
-  sem numFailedName =
-  | _ -> get (findRuntimeIds ()) 0
-
   sem utestRunnerName : () -> Name
   sem utestRunnerName =
+  | _ -> get (findRuntimeIds ()) 0
+
+  sem utestExitOnFailureName : () -> Name
+  sem utestExitOnFailureName =
   | _ -> get (findRuntimeIds ()) 1
 
   sem defaultPrettyPrintName : () -> Name
@@ -587,8 +587,6 @@ lang VariantPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
       generateSymbolPrettyPrint env ty
     else if nameEq id (nameNoSym "Ref") then
       generateReferencePrettyPrint env ty
-    else if nameEq id (nameNoSym "Map") then
-      generateMapPrettyPrint info env id tyArgs ty
     else if nameEq id (nameNoSym "BootParseTree") then
       generateBootParseTreePrettyPrint env ty
     else defaultVariantPrettyPrint info env id tyArgs ty
@@ -609,39 +607,6 @@ lang VariantPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
   sem generateReferencePrettyPrint : UtestEnv -> Type -> Expr
   sem generateReferencePrettyPrint env =
   | ty -> _lam (nameNoSym "") ty (_stringLit "<ref>")
-
-  sem generateMapPrettyPrint : Info -> UtestEnv -> Name -> [Type] -> Type -> Expr
-  sem generateMapPrettyPrint info env id tyArgs =
-  | ty ->
-    match tyArgs with [k, v] in
-    let target = nameSym "m" in
-    let entry = nameSym "entry" in
-    let kId = nameSym "k" in
-    let vId = nameSym "v" in
-    let entryTy = _tupleTy [k, v] in
-    let joinTy = _tyarrows [_seqTy _stringTy, _stringTy] in
-    match getPrettyPrintExpr info env k with (env, ppKey) in
-    match getPrettyPrintExpr info env v with (env, ppValue) in
-    -- NOTE(larshum, 2022-12-30): This defines the format in which to pretty
-    -- print each entry of a map.
-    let format =
-      _apps _concat
-        [ _apps ppKey [_var kId k]
-        , _apps _concat
-            [ _stringLit " -> "
-            , _apps ppValue [_var vId v] ] ]
-    in
-    let ppEntry =
-      _lam entry entryTy
-        (_match (_var entry entryTy)
-          (_patTuple [_patVar kId k, _patVar vId v] entryTy)
-          format (_never _stringTy) _stringTy)
-    in
-    let bindingTy = _seqTy (_tupleTy [k, v]) in
-    let ppSeq = _var (ppSeqName ()) (_pprintTy bindingTy) in
-    let mapBindings = _const (CMapBindings ()) (tyarrows_ [ty, bindingTy]) in
-    _lam target ty
-      (_apps ppSeq [ppEntry, _apps mapBindings [_var target ty]])
 
   sem generateBootParseTreePrettyPrint : UtestEnv -> Type -> Expr
   sem generateBootParseTreePrettyPrint env =
@@ -806,8 +771,6 @@ lang VariantEquality = GenerateEqualityBase + UtestRuntime
       generateSymbolEquality info env ty
     else if nameEq id (nameNoSym "Ref") then
       generateReferenceEquality info env ty
-    else if nameEq id (nameNoSym "Map") then
-      generateMapEquality info env tyArgs ty
     else if nameEq id (nameNoSym "BootParseTree") then
       generateBootParseTreeEquality info env ty
     else defaultVariantEq info env id tyArgs ty
@@ -825,18 +788,6 @@ lang VariantEquality = GenerateEqualityBase + UtestRuntime
   | ty ->
     errorSingle [info]
       "A custom equality function must be provided for reference types.\n"
-
-  sem generateMapEquality : Info -> UtestEnv -> [Type] -> Type -> Expr
-  sem generateMapEquality info env tyArgs =
-  | ty ->
-    match tyArgs with [k, v] then
-      let larg = nameSym "l" in
-      let rarg = nameSym "r" in
-      match getEqualityExpr info env v with (env, valueEq) in
-      let eqmap = _const (CMapEq ()) (_tyarrows [_eqTy v, _eqTy ty]) in
-      _lam larg ty (_lam rarg ty
-        (_apps eqmap [valueEq, _var larg ty, _var rarg ty]))
-    else errorSingle [info] "Invalid Map type"
 
   sem generateBootParseTreeEquality : Info -> UtestEnv -> Type -> Expr
   sem generateBootParseTreeEquality info env =
@@ -1081,27 +1032,9 @@ lang MExprUtestGenerate =
     let inexpr = insertUtestTail t.inexpr in
     TmExt {t with inexpr = inexpr, ty = tyTm inexpr}
   | t ->
-    let refTy = TyApp {
-      lhs = _conTy (nameNoSym "Ref"), rhs = _intTy, info = _utestInfo
-    } in
-    let derefExpr = TmConst {
-      val = CDeRef (), ty = _tyarrows [refTy, _intTy], info = _utestInfo
-    } in
-    let testsFailedCond =
-      _apps
-        (_const (CGti ()) (_tyarrows [_intTy, _intTy, _boolTy]))
-        [ _apps derefExpr [_var (numFailedName ()) refTy]
-        , _const (CInt {val = 0}) _intTy ]
-    in
-    let thn = TmLet {
-      ident = nameNoSym "", tyAnnot = tyTm t, tyBody = tyTm t, body = t,
-      inexpr =
-        _apps
-          (_const (CExit ()) (_tyarrows [_intTy, tyTm t]))
-          [_const (CInt {val = 1}) _intTy],
-      ty = tyTm t, info = _utestInfo
-    } in
-    _match testsFailedCond (_patBool true) thn t (tyTm t)
+    let exitOnFailure =
+      _var (utestExitOnFailureName ()) (_tyarrows [tyTm t, tyTm t]) in
+    _apps exitOnFailure [t]
 
   -- Merges the AST with the utest header, which consists of the runtime
   -- definitions from 'utest-runtime.mc'.
@@ -1158,7 +1091,7 @@ let emptyEnv = utestEnvEmpty () in
 
 let eval = lam env. lam e.
   let e = mergeWithUtestHeader env e in
-  eval {env = evalEnvEmpty} e
+  eval (evalCtxEmpty ()) e
 in
 
 let evalEquality : UtestEnv -> Type -> Expr -> Expr -> Expr =
@@ -1294,21 +1227,5 @@ with true in
 let refTy = tyapp_ (tycon_ "Ref") tyint_ in
 let r = ref_ (int_ 0) in
 utest evalPrettyPrint env refTy r with str_ "<ref>" using eqExpr in
-
-let mapTy = tyapp_ (tyapp_ (tycon_ "Map") tyint_) tyint_ in
-let subExpr =
-  let x = nameSym "x" in
-  let y = nameSym "y" in
-  nulam_ x (nulam_ y (subi_ (nvar_ x) (nvar_ y))) in
-let m1 = mapEmpty_ subExpr in
-let m2 = mapInsert_ (int_ 2) (int_ 3) m1 in
-let m3 = mapInsert_ (int_ 3) (int_ 4) m2 in
-utest evalPrettyPrint env mapTy m1 with str_ "[]" using eqExpr in
-utest evalPrettyPrint env mapTy m2 with str_ "[2 -> 3]" using eqExpr in
-utest evalPrettyPrint env mapTy m3 with str_ "[2 -> 3,3 -> 4]" using eqExpr in
-utest evalEquality env mapTy m1 m1 with true_ using eqExpr in
-utest evalEquality env mapTy m1 m2 with false_ using eqExpr in
-utest evalEquality env mapTy m2 m3 with false_ using eqExpr in
-utest evalEquality env mapTy m2 m2 with true_ using eqExpr in
 
 ()
