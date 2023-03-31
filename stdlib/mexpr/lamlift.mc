@@ -385,6 +385,9 @@ lang LambdaLiftSolveEquations = LambdaLift + MExprCallGraph
     let sccs = digraphTarjan g in
     let state = propagateFunNames state g (reverse sccs) in
     solveSetEquations state t.inexpr
+  | TmExt t ->
+    let state = {state with sols = mapInsert t.ident (mapEmpty nameCmp) state.sols} in
+    solveSetEquations state t.inexpr
   | TmMatch t ->
     let state = solveSetEquations state t.target in
     let state = collectBoundVariablesInPattern state t.pat in
@@ -1700,5 +1703,17 @@ utest finalAst with expected using eqExpr in
 -- final solutions should be different from what we initially get from solving
 -- the set equations.
 utest state.sols with solutions using lam l. lam r. not (mapEq (mapEq eqType) l r) in
+
+let externals = preprocess (bindall_ [
+  next_ f false (tyarrow_ tyfloat_ tyfloat_),
+  nulet_ g (nulam_ x (app_ (nvar_ f) (nvar_ x))),
+  app_ (nvar_ g) (float_ 2.5)
+]) in
+match liftLambdasWithSolutions externals with (solutions, resultAst) in
+utest externals with resultAst in
+utest solutions with mapFromSeq nameCmp [
+  (f, mapFromSeq nameCmp []),
+  (g, mapFromSeq nameCmp [])
+] using mapEq (mapEq eqType) in
 
 ()
