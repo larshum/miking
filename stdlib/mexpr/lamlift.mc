@@ -614,10 +614,11 @@ lang LambdaLiftGlobal = LambdaLift
   sem liftBody acc =
   | TmLet t ->
     match liftBody acc t.body with (acc, body) in
-    match liftBody acc t.inexpr with (acc, inexpr) in
     if isFunctionType t.tyBody then
-      (snoc acc (TmLet {t with body = body, inexpr = unit_}), inexpr)
+      let acc = snoc acc (TmLet {t with body = body, inexpr = unit_}) in
+      liftBody acc t.inexpr
     else
+      match liftBody acc t.inexpr with (acc, inexpr) in
       (acc, TmLet {t with body = body, inexpr = inexpr})
   | TmRecLets t ->
     let liftBindingBody = lam lifted. lam bind.
@@ -1283,8 +1284,8 @@ let multipleInnerLets = preprocess (bindall_ [
     addi_ (app_ (var_ "g") (int_ 1)) (app_ (var_ "h") (int_ 2))])),
   app_ (var_ "f") (int_ 1)]) in
 let expected = preprocess (bindall_ [
-  ulet_ "h" (ulam_ "x" (ulam_ "z" (addi_ (var_ "z") (var_ "x")))),
   ulet_ "g" (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))),
+  ulet_ "h" (ulam_ "x" (ulam_ "z" (addi_ (var_ "z") (var_ "x")))),
   ulet_ "f" (ulam_ "x" (
     addi_ (appf2_ (var_ "g") (var_ "x") (int_ 1))
           (appf2_ (var_ "h") (var_ "x") (int_ 2)))),
@@ -1510,7 +1511,7 @@ let letMultiParam = preprocess (bindall_ [
   ulet_ "b" (int_ 6),
   ulet_ "f" (ulam_ "x" (
     addi_ (addi_ (var_ "a") (var_ "b")) (var_ "x"))),
-  app_ (var_ "f") (int_ 7)]) in 
+  app_ (var_ "f") (int_ 7)]) in
 let expected = preprocess (bindall_ [
   ulet_ "a" (int_ 2),
   ulet_ "b" (int_ 6),
@@ -1651,8 +1652,8 @@ let multiCaptures = preprocess (nulet_ f (nulam_ x (bindall_ [
 ]))) in
 let ast = liftLambdas multiCaptures in
 let expected = preprocess (bindall_ [
-  nulet_ h (nulam_ b (nulam_ z (addi_ (nvar_ b) (nvar_ z)))),
   nulet_ g (nulam_ a (nulam_ y (addi_ (nvar_ a) (nvar_ y)))),
+  nulet_ h (nulam_ b (nulam_ z (addi_ (nvar_ b) (nvar_ z)))),
   nulet_ f (nulam_ x (addi_ (appf2_ (nvar_ g) (nvar_ x) (int_ 2))
                             (appf2_ (nvar_ h) (nvar_ x) (int_ 4)))),
   unit_
@@ -1692,8 +1693,8 @@ utest state.sols with mapFromSeq nameCmp [
 ] using mapEq (mapEq eqType) in
 match liftLambdasWithSolutions expected with (solutions, finalAst) in
 let expected = preprocess (nureclets_ [
-  (a, ulam_ "x1" (nulam_ w (appf2_ (nvar_ h) (var_ "x1") (nvar_ w)))),
   (h, ulam_ "x2" (nulam_ z (addi_ (var_ "x2") (nvar_ z)))),
+  (a, ulam_ "x1" (nulam_ w (appf2_ (nvar_ h) (var_ "x1") (nvar_ w)))),
   (g, ulam_ "x3" (nulam_ y (app_ (nvar_ a) (var_ "x3")))),
   (f, nulam_ x (appf2_ (nvar_ g) (nvar_ x) (int_ 1)))
 ]) in
