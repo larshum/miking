@@ -310,10 +310,10 @@ lang LambdaLiftSolveEquations = LambdaLift + MExprCallGraph
     freeVariablesExpr state bound free t.els
   | t -> sfold_Expr_Expr (freeVariablesExpr state bound) free t
 
-  sem propagateFunNames : LambdaLiftState -> Digraph Name Int -> [[Name]]
+  sem propagateFunNames : Digraph Name Int -> LambdaLiftState -> [Name]
                        -> LambdaLiftState
-  sem propagateFunNames state g =
-  | [scc] ++ t ->
+  sem propagateFunNames g state =
+  | scc ->
     -- NOTE(larshum, 2023-01-22): The free variables for all bindings in the
     -- same strongly connected component is the union of their local free
     -- variables.
@@ -328,13 +328,22 @@ lang LambdaLiftSolveEquations = LambdaLift + MExprCallGraph
 
     -- NOTE(larshum, 2023-01-22): Update the solutions to all bindings in this
     -- strongly connected component.
-    let state =
-      foldl
-        (lam state. lam id. {state with sols = mapInsert id fv state.sols})
-        state scc
+    foldl
+      (lam state. lam id. {state with sols = mapInsert id fv state.sols})
+      state scc
+
+  sem deduplicateBindingParameters : LambdaLiftState -> RecLetBinding -> LambdaLiftState
+  sem deduplicateBindingParameters state =
+  | {ident = ident, body = body, info = info} ->
+    recursive let collectParameters = lam params. lam body.
+      match body with TmLam t then
+        collectParameters (mapInsert t.ident t.tyIdent params) t.body
+      else params
     in
-    propagateFunNames state g t
-  | [] -> state
+    let params = collectParameters (mapEmpty nameCmp) body in
+    match mapLookup ident state.sols with Some solution then
+      {state with sols = mapInsert ident (mapDifference solution params) state.sols}
+    else errorSingle [info] "Lambda lifting solution not found for binding"
 
   sem solveSetEquations : LambdaLiftState -> Expr -> LambdaLiftState
   sem solveSetEquations state =
@@ -383,7 +392,14 @@ lang LambdaLiftSolveEquations = LambdaLift + MExprCallGraph
     -- equations for the recursive bindings.
     let g = constructCallGraph (TmRecLets t) in
     let sccs = digraphTarjan g in
-    let state = propagateFunNames state g (reverse sccs) in
+    let state = foldl (propagateFunNames g) state (reverse sccs) in
+
+    -- TODO(larshum, 2023-04-04): Implement the improved approach which does
+    -- not introduce any unnecessary free variables. This is a temporary
+    -- workaround for the case where the parameter of a binding is used
+    -- directly.
+    let state = foldl deduplicateBindingParameters state t.bindings in
+
     solveSetEquations state t.inexpr
   | TmExt t ->
     let state = {state with sols = mapInsert t.ident (mapEmpty nameCmp) state.sols} in
@@ -438,7 +454,6 @@ lang LambdaLiftCaptureVariables = LambdaLift + LambdaLiftSolveEquations
         (lam acc. lam id. lam solution.
           if mapIsEmpty solution then acc
           else
-            let binds = mapBindings solution in
             let subExpr = lam bound. lam ty. lam info.
               -- NOTE(larshum, 2023-01-26): Compute the new type of the
               -- function, using variables bound in the local scope.
@@ -448,7 +463,7 @@ lang LambdaLiftCaptureVariables = LambdaLift + LambdaLiftSolveEquations
                     match fv with (fvId, _) in
                     match mapLookup fvId bound with Some fvTy then (fvId, fvTy)
                     else errorSingle [info] "Unbound variable found in lambda lifting")
-                  binds
+                  (mapBindings solution)
               in
               let ty =
                 foldl
@@ -509,7 +524,8 @@ lang LambdaLiftCaptureVariables = LambdaLift + LambdaLiftSolveEquations
   sem captureFreeVariablesH : LambdaLiftCaptureState -> Expr -> Expr
   sem captureFreeVariablesH state =
   | TmVar t ->
-    match mapLookup t.ident state.subs with Some subFn then subFn state.bound t.ty t.info
+    match mapLookup t.ident state.subs with Some subFn then
+      subFn state.bound t.ty t.info
     else TmVar t
   | TmLam t ->
     let state = {state with bound = mapInsert t.ident t.tyIdent state.bound} in
@@ -534,7 +550,6 @@ lang LambdaLiftCaptureVariables = LambdaLift + LambdaLiftSolveEquations
       map
         (lam bind.
           match mapLookup bind.ident state.lamIns with Some (insertLambdas, updateTyBody) then
-            let tyAnnot = TyUnknown {info = infoTy bind.tyAnnot} in
             {bind with tyAnnot = TyUnknown {info = infoTy bind.tyAnnot},
                        tyBody = updateTyBody bind.tyBody,
                        body = insertLambdas bind.body}
@@ -1711,10 +1726,30 @@ let externals = preprocess (bindall_ [
   app_ (nvar_ g) (float_ 2.5)
 ]) in
 match liftLambdasWithSolutions externals with (solutions, resultAst) in
-utest externals with resultAst in
+utest externals with resultAst using eqExpr in
 utest solutions with mapFromSeq nameCmp [
   (f, mapFromSeq nameCmp []),
   (g, mapFromSeq nameCmp [])
 ] using mapEq (mapEq eqType) in
+
+let innerParameterCaptureReclet = preprocess (bindall_ [
+  ureclets_ [
+    ("eval", ulam_ "env" (ulam_ "x" (bindall_ [
+      ulet_ "f" (ulam_ "y" (appf2_ (var_ "eval") (var_ "env") (var_ "y"))),
+      app_ (var_ "f") (var_ "x")
+    ])))
+  ],
+  appf2_ (var_ "eval") (urecord_ []) (int_ 5)
+]) in
+let expected = preprocess (bindall_ [
+  ureclets_ [
+    ("f", ulam_ "env" (ulam_ "y" (appf2_ (var_ "eval") (var_ "env") (var_ "y")))),
+    ("eval", ulam_ "env" (ulam_ "x" (bindall_ [
+      appf2_ (var_ "f") (var_ "env") (var_ "x")
+    ])))
+  ],
+  appf2_ (var_ "eval") (urecord_ []) (int_ 5)
+]) in
+utest liftLambdas innerParameterCaptureReclet with expected using eqExpr in
 
 ()
