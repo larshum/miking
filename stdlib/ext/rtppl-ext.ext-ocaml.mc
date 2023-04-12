@@ -32,5 +32,11 @@ let rtpplExtMap =
            , ty = tyarrow_ otyunit_ tyint_ } ),
     ( "setPriority"
     , impl { expr = "Rtppl.set_priority"
-           , ty = tyarrow_ tyint_ tyint_ } )
+           , ty = tyarrow_ tyint_ tyint_ } ),
+    ( "externalReadFloatPipe"
+    , impl { expr = "Rtppl.read_float_named_pipe"
+           , ty = tyarrow_ otystring_ (otyarray_ (otytuple_ [tyint_, tyfloat_])) } ),
+    ( "externalWriteFloatPipe"
+    , impl { expr = "Rtppl.write_float_named_pipe"
+           , ty = tyarrows_ [otystring_, tyfloat_, otytuple_ [tyint_, tyint_], otyunit_] } )
   ]

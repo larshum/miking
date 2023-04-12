@@ -42,12 +42,17 @@ type Signal = Int
 external setSignalHandler : Signal -> (Signal -> ()) -> ()
 
 -- External functions used for supporting the 'sdelay' keyword
-external clockGetTime : () -> (Int, Int)
-external clockNanosleep : (Int, Int) -> ()
+type Timespec = (Int, Int)
+external clockGetTime : () -> Timespec
+external clockNanosleep : Timespec -> ()
 
 -- Sets the priority of the process, returning the previous priority
 external setMaxPriority : () -> Int
 external setPriority : Int -> Int
+
+-- Reads and writes to external pipes
+external externalReadFloatPipe : String -> [(Int, Float)]
+external externalWriteFloatPipe : String -> Float -> Timespec -> ()
 
 mexpr
 
