@@ -51,7 +51,7 @@ external setMaxPriority : () -> Int
 external setPriority : Int -> Int
 
 -- Reads and writes to external pipes
-external externalReadFloatPipe : String -> [(Int, Float)]
+external externalReadFloatPipe : String -> [(Timespec, Float)]
 external externalWriteFloatPipe : String -> Float -> Timespec -> ()
 
 mexpr

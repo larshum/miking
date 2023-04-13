@@ -5,6 +5,8 @@ let tyts_ = tytuple_ [tyint_, tyunknown_]
 let impl = lam arg : {expr : String, ty : Type }.
   [ { expr = arg.expr, ty = arg.ty, libraries = ["rtppl-support"], cLibraries = ["rt"] } ]
 
+let timespec = otytuple_ [tyint_, tyint_]
+
 let rtpplExtMap =
   use OCamlTypeAst in
   mapFromSeq cmpString [
@@ -23,10 +25,10 @@ let rtpplExtMap =
            , ty = tyarrows_ [tyint_, tyarrow_ tyint_ otyunit_, otyunit_] } ),
     ( "clockGetTime"
     , impl { expr = "Rtppl.clock_get_time"
-           , ty = tyarrow_ otyunit_ (otytuple_ [tyint_, tyint_])} ),
+           , ty = tyarrow_ otyunit_ timespec} ),
     ( "clockNanosleep"
     , impl { expr = "Rtppl.clock_nanosleep"
-           , ty = tyarrow_ (otytuple_ [tyint_, tyint_]) otyunit_ } ),
+           , ty = tyarrow_ timespec otyunit_ } ),
     ( "setMaxPriority"
     , impl { expr = "Rtppl.set_max_priority"
            , ty = tyarrow_ otyunit_ tyint_ } ),
@@ -35,8 +37,8 @@ let rtpplExtMap =
            , ty = tyarrow_ tyint_ tyint_ } ),
     ( "externalReadFloatPipe"
     , impl { expr = "Rtppl.read_float_named_pipe"
-           , ty = tyarrow_ otystring_ (otyarray_ (otytuple_ [tyint_, tyfloat_])) } ),
+           , ty = tyarrow_ otystring_ (otyarray_ (otytuple_ [timespec, tyfloat_])) } ),
     ( "externalWriteFloatPipe"
     , impl { expr = "Rtppl.write_float_named_pipe"
-           , ty = tyarrows_ [otystring_, tyfloat_, otytuple_ [tyint_, tyint_], otyunit_] } )
+           , ty = tyarrows_ [otystring_, tyfloat_, timespec, otyunit_] } )
   ]
