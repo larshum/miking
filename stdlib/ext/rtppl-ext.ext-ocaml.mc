@@ -38,7 +38,13 @@ let rtpplExtMap =
     ( "externalReadFloatPipe"
     , impl { expr = "Rtppl.read_float_named_pipe"
            , ty = tyarrow_ otystring_ (otyarray_ (otytuple_ [timespec, tyfloat_])) } ),
+    ( "externalReadDistFloatRecordPipe"
+    , impl { expr = "Rtppl.read_dist_float_record_named_pipe"
+           , ty = tyarrow_ otystring_ (otyarray_ (otytuple_ [timespec, tyunknown_])) } ),
     ( "externalWriteFloatPipe"
     , impl { expr = "Rtppl.write_float_named_pipe"
-           , ty = tyarrows_ [otystring_, tyfloat_, timespec, otyunit_] } )
+           , ty = tyarrows_ [otystring_, tyfloat_, timespec, otyunit_] } ),
+    ( "externalWriteDistFloatRecordPipe"
+    , impl { expr = "Rtppl.write_dist_float_record_named_pipe"
+           , ty = tyarrows_ [otystring_, tyunknown_, timespec, tyint_, otyunit_] } )
   ]
