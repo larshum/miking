@@ -52,9 +52,9 @@ external setPriority : Int -> Int
 
 -- Reads and writes to external pipes
 external externalReadFloatPipe : String -> [(Timespec, Float)]
-external externalReadDistFloatRecordPipe : String -> [(Timespec, Opaque)]
 external externalWriteFloatPipe : String -> Float -> Timespec -> ()
-external externalWriteDistFloatRecordPipe : String -> Opaque -> Timespec -> Int -> ()
+external externalReadDistFloatRecordPipe : String -> Int -> [(Timespec, [(Float, Opaque)])]
+external externalWriteDistFloatRecordPipe : String -> ([Opaque], [Float]) -> Timespec -> Int -> ()
 
 mexpr
 
