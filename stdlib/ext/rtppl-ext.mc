@@ -15,11 +15,15 @@ external setPriority : Int -> Int
 
 type Opaque
 
+-- Opens and closes file descriptors to pipes
+external externalOpenFileNonblocking : String -> Int
+external externalCloseFileDescriptor : Int -> ()
+
 -- Reads and writes to external pipes
-external externalReadFloatPipe : String -> [(Timespec, Float)]
-external externalWriteFloatPipe : String -> Float -> Timespec -> ()
-external externalReadDistFloatRecordPipe : String -> Int -> [(Timespec, [(Float, Opaque)])]
-external externalWriteDistFloatRecordPipe : String -> ([Opaque], [Float]) -> Timespec -> Int -> ()
+external externalReadFloatPipe : Int -> [(Timespec, Float)]
+external externalWriteFloatPipe : Int -> (Timespec, Float) -> ()
+external externalReadDistFloatRecordPipe : Int -> Int -> [(Timespec, [(Float, Opaque)])]
+external externalWriteDistFloatRecordPipe : Int -> Int -> (Timespec, ([Opaque], [Float])) -> ()
 
 mexpr
 

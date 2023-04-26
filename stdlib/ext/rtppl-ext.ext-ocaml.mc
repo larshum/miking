@@ -3,7 +3,7 @@ include "ocaml/ast.mc"
 
 let tyts_ = tytuple_ [tyint_, tyunknown_]
 let impl = lam arg : {expr : String, ty : Type }.
-  [ { expr = arg.expr, ty = arg.ty, libraries = ["rtppl-support"], cLibraries = ["rt"] } ]
+  [ { expr = arg.expr, ty = arg.ty, libraries = ["rtppl-support"], cLibraries = [] } ]
 
 let timespec = otytuple_ [tyint_, tyint_]
 
@@ -25,24 +25,25 @@ let rtpplExtMap =
     ( "setPriority"
     , impl { expr = "Rtppl.set_priority"
            , ty = tyarrow_ tyint_ tyint_ } ),
-    ( "externalSeqToOcamlArray"
-    , impl { expr = "Rtppl.seq_to_ocaml_array"
-           , ty = tyarrow_ (tyseq_ tyunknown_) (otyarray_ tyunknown_) } ),
-    ( "externalOcamlArrayToSeq"
-    , impl { expr = "Rtppl.ocaml_array_to_seq"
-           , ty = tyarrow_ (otyarray_ tyunknown_) (tyseq_ tyunknown_) } ),
+    ( "externalOpenFileNonblocking"
+    , impl { expr = "Rtppl.open_file_nonblocking"
+           , ty = tyarrow_ otystring_ tyint_ } ),
+    ( "externalCloseFileDescriptor"
+    , impl { expr = "Rtppl.close_file_descriptor"
+           , ty = tyarrow_ tyint_ otyunit_ } ),
     ( "externalReadFloatPipe"
     , impl { expr = "Rtppl.read_float_named_pipe"
-           , ty = tyarrow_ otystring_ (otyarray_ (otytuple_ [timespec, tyfloat_])) } ),
+           , ty = tyarrow_ tyint_ (otyarray_ (otytuple_ [timespec, tyfloat_])) } ),
     ( "externalWriteFloatPipe"
     , impl { expr = "Rtppl.write_float_named_pipe"
-           , ty = tyarrows_ [otystring_, tyfloat_, timespec, otyunit_] } ),
+           , ty = tyarrows_ [tyint_, otytuple_ [timespec, tyfloat_], otyunit_] } ),
     ( "externalReadDistFloatRecordPipe"
     , impl { expr = "Rtppl.read_dist_float_record_named_pipe"
-           , ty = tyarrows_ [otystring_, tyint_,
+           , ty = tyarrows_ [tyint_, tyint_,
                otyarray_ (otytuple_ [timespec, otyarray_ (otytuple_ [tyfloat_, tyunknown_])])] } ),
     ( "externalWriteDistFloatRecordPipe"
     , impl { expr = "Rtppl.write_dist_float_record_named_pipe"
-           , ty = tyarrows_ [otystring_,
-               otytuple_ [otyarray_ tyunknown_, otyarray_ tyfloat_], timespec, tyint_, otyunit_] } )
+           , ty = tyarrows_ [tyint_, tyint_,
+               otytuple_ [timespec, otytuple_ [otyarray_ tyunknown_, otyarray_ tyfloat_]],
+               otyunit_] } )
   ]
