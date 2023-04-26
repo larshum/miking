@@ -4,20 +4,20 @@ type Signal = Int
 -- signal is simply encoded as an integer).
 external setSignalHandler : Signal -> (Signal -> ()) -> ()
 
--- External functions used for supporting the 'sdelay' keyword
 type Timespec = (Int, Int)
-external clockGetTime : () -> Timespec
+external getMonotonicTime : () -> Timespec
+external getWallClockTime : () -> Timespec
 external clockNanosleep : Timespec -> ()
 
 -- Sets the priority of the process, returning the previous priority
 external setMaxPriority : () -> Int
 external setPriority : Int -> Int
 
-type Opaque
-
 -- Opens and closes file descriptors to pipes
 external externalOpenFileNonblocking : String -> Int
 external externalCloseFileDescriptor : Int -> ()
+
+type Opaque
 
 -- Reads and writes to external pipes
 external externalReadFloatPipe : Int -> [(Timespec, Float)]

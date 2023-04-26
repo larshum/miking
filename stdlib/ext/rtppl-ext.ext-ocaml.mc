@@ -13,8 +13,11 @@ let rtpplExtMap =
     ( "setSignalHandler"
     , impl { expr = "Rtppl.set_signal_handler"
            , ty = tyarrows_ [tyint_, tyarrow_ tyint_ otyunit_, otyunit_] } ),
-    ( "clockGetTime"
-    , impl { expr = "Rtppl.clock_get_time"
+    ( "getMonotonicTime"
+    , impl { expr = "Rtppl.get_monotonic_time"
+           , ty = tyarrow_ otyunit_ timespec} ),
+    ( "getWallClockTime"
+    , impl { expr = "Rtppl.get_wall_clock_time"
            , ty = tyarrow_ otyunit_ timespec} ),
     ( "clockNanosleep"
     , impl { expr = "Rtppl.clock_nanosleep"
