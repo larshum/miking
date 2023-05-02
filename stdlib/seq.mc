@@ -336,6 +336,30 @@ with Some 6 using optionEq eqi
 utest findMap (lam x. if eqi x 0 then Some x else None ()) [1,2,3]
 with None () using optionEq eqi
 
+-- NOTE(larshum, 2023-05-02): Finds the minimum index in the given sequence for
+-- which applying the provided function yields a non-negative value.
+--
+-- This function assumes the sequence is sorted according to the provided
+-- sequence, in the sense that 'map f s' yields a sequence of integers in
+-- increasing order.
+let lowerBoundBinarySearch : all a. (a -> Int) -> [a] -> Int = lam f. lam s.
+  recursive let work = lam lo. lam hi.
+    let n = subi hi lo in
+    if gti n 1 then
+      let mid = addi lo (divi (subi hi lo) 2) in
+      let c = f (get s mid) in
+      if gti c 0 then work lo mid
+      else work mid hi
+    else lo
+  in
+  work 0 (length s)
+
+let s = [0,1,2,3,4,5,6,7,8,9]
+utest lowerBoundBinarySearch (lam x. x) s with 0
+utest lowerBoundBinarySearch (lam x. subi x 9) s with 9
+utest lowerBoundBinarySearch (lam x. subi x 5) s with 5
+utest lowerBoundBinarySearch (lam x. floorfi x) [negf 0.5, negf 0.3, negf 0.1, 0.6, 1.2] with 3
+
 let partition = lam p. lam seq.
   recursive let work = lam l. lam r. lam seq.
     match seq with [] then (l, r)
