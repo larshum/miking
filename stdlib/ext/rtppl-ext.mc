@@ -7,6 +7,7 @@ external setSignalHandler : Signal -> (Signal -> ()) -> ()
 type Timespec = (Int, Int)
 external getMonotonicTime : () -> Timespec
 external getWallClockTime : () -> Timespec
+external getProcessCpuTime : () -> Timespec
 external clockNanosleep : Timespec -> ()
 
 -- Sets the priority of the process, returning the previous priority
@@ -27,7 +28,7 @@ external externalWriteDistFloatPipe : Int -> (Timespec, ([Float], [Float])) -> (
 external externalReadDistFloatRecordPipe : Int -> Int -> [(Timespec, [(Float, Opaque)])]
 external externalWriteDistFloatRecordPipe : Int -> Int -> (Timespec, ([Opaque], [Float])) -> ()
 
-external externalBatchedInference : (() -> Opaque) -> Timespec -> Int -> [Opaque]
+external externalBatchedInference : (() -> Opaque) -> Timespec -> [Opaque]
 
 mexpr
 

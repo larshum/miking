@@ -21,6 +21,9 @@ let rtpplExtMap =
     ( "getWallClockTime"
     , impl { expr = "Rtppl.get_wall_clock_time"
            , ty = tyarrow_ otyunit_ timespec} ),
+    ( "getProcessCpuTime"
+    , impl { expr = "Rtppl.get_process_cpu_time"
+           , ty = tyarrow_ otyunit_ timespec} ),
     ( "clockNanosleep"
     , impl { expr = "Rtppl.clock_nanosleep"
            , ty = tyarrow_ timespec otyunit_ } ),
@@ -56,5 +59,5 @@ let rtpplExtMap =
            , ty = tyarrows_ [tyint_, tyint_, otytuple_ [timespec, writeDistTy tyunknown_], otyunit_] } ),
     ( "externalBatchedInference"
     , impl { expr = "Rtppl.rtppl_batched_inference"
-           , ty = tyarrows_ [tyarrow_ otyunit_ tyunknown_, timespec, tyint_, otylist_ tyunknown_] } )
+           , ty = tyarrows_ [tyarrow_ otyunit_ tyunknown_, timespec, otylist_ tyunknown_] } )
   ]
