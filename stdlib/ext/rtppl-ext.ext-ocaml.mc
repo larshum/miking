@@ -6,6 +6,8 @@ let impl = lam arg : {expr : String, ty : Type }.
   [ { expr = arg.expr, ty = arg.ty, libraries = ["rtppl-support"], cLibraries = [] } ]
 
 let timespec = otytuple_ [tyint_, tyint_]
+let readDistTy = lam ty. otyarray_ (otytuple_ [tyfloat_, ty])
+let writeDistTy = lam ty. otytuple_ [otyarray_ ty, otyarray_ tyfloat_]
 
 let rtpplExtMap =
   use OCamlTypeAst in
@@ -40,13 +42,19 @@ let rtpplExtMap =
     ( "externalWriteFloatPipe"
     , impl { expr = "Rtppl.write_float_named_pipe"
            , ty = tyarrows_ [tyint_, otytuple_ [timespec, tyfloat_], otyunit_] } ),
+    ( "externalReadDistFloatPipe"
+    , impl { expr = "Rtppl.read_dist_float_named_pipe"
+           , ty = tyarrow_ tyint_ (otyarray_ (otytuple_ [timespec, readDistTy tyfloat_])) } ),
+    ( "externalWriteDistFloatPipe"
+    , impl { expr = "Rtppl.write_dist_float_named_pipe"
+           , ty = tyarrows_ [tyint_, otytuple_ [timespec, writeDistTy tyfloat_], otyunit_] } ),
     ( "externalReadDistFloatRecordPipe"
     , impl { expr = "Rtppl.read_dist_float_record_named_pipe"
-           , ty = tyarrows_ [tyint_, tyint_,
-               otyarray_ (otytuple_ [timespec, otyarray_ (otytuple_ [tyfloat_, tyunknown_])])] } ),
+           , ty = tyarrows_ [tyint_, tyint_, otyarray_ (otytuple_ [timespec, readDistTy tyunknown_])] } ),
     ( "externalWriteDistFloatRecordPipe"
     , impl { expr = "Rtppl.write_dist_float_record_named_pipe"
-           , ty = tyarrows_ [tyint_, tyint_,
-               otytuple_ [timespec, otytuple_ [otyarray_ tyunknown_, otyarray_ tyfloat_]],
-               otyunit_] } )
+           , ty = tyarrows_ [tyint_, tyint_, otytuple_ [timespec, writeDistTy tyunknown_], otyunit_] } ),
+    ( "externalBatchedInference"
+    , impl { expr = "Rtppl.rtppl_batched_inference"
+           , ty = tyarrows_ [tyarrow_ otyunit_ tyunknown_, timespec, tyint_, otylist_ tyunknown_] } )
   ]
