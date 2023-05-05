@@ -1,8 +1,7 @@
 type Signal = Int
 
--- Overrides the signal handler for a particular signal (for simplicity, the
--- signal is simply encoded as an integer).
-external setSignalHandler : Signal -> (Signal -> ()) -> ()
+-- Overrides the signal handler for the SIGINT signal.
+external setSigintHandler : (Signal -> ()) -> ()
 
 type Timespec = (Int, Int)
 external getMonotonicTime : () -> Timespec
@@ -32,6 +31,6 @@ external externalBatchedInference : (() -> Opaque) -> Timespec -> [Opaque]
 
 mexpr
 
-utest setSignalHandler 1 (lam. print "hello") with true using lam. lam. true in
+utest setSignalHandler sigint (lam. print "hello") with true using lam. lam. true in
 
 ()

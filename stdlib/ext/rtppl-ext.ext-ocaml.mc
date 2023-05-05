@@ -12,9 +12,9 @@ let writeDistTy = lam ty. otytuple_ [otyarray_ ty, otyarray_ tyfloat_]
 let rtpplExtMap =
   use OCamlTypeAst in
   mapFromSeq cmpString [
-    ( "setSignalHandler"
-    , impl { expr = "Rtppl.set_signal_handler"
-           , ty = tyarrows_ [tyint_, tyarrow_ tyint_ otyunit_, otyunit_] } ),
+    ( "setSigintHandler"
+    , impl { expr = "Rtppl.set_signal_handler Sys.sigint"
+           , ty = tyarrow_ (tyarrow_ tyint_ otyunit_) otyunit_ } ),
     ( "getMonotonicTime"
     , impl { expr = "Rtppl.get_monotonic_time"
            , ty = tyarrow_ otyunit_ timespec} ),
