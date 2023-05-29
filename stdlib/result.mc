@@ -62,11 +62,12 @@ con ResultErr : all w. all e. all a.
   { warnings : Map Symbol w, errors : Map Symbol e } -> Result w e a
 
 let _emptyMap
-  : all x. Map Symbol x
+  : all x. () -> Map Symbol x
+  -- TODO(aathn, 2022-01-21): Relax value restriction
   -- TODO(vipa, 2022-01-21): This assumes that sym2hash is a perfect
   -- hash, i.e., that there are no collisions, which is presently true
   -- but might not be in the future.
-  = mapEmpty (lam l. lam r. subi (sym2hash l) (sym2hash r))
+  = lam. mapEmpty (lam l. lam r. subi (sym2hash l) (sym2hash r))
 
 -- Produce a value to pattern match on from a result, for when we want
 -- to report errors and warnings instead of perform additional
@@ -92,7 +93,7 @@ let _prepTest
 -- as `pure` or `return`.
 let _ok
   : all w. all e. all a. a -> Result w e a
-  = lam value. ResultOk { warnings = _emptyMap, value = value }
+  = lam value. ResultOk { warnings = _emptyMap (), value = value }
 
 utest _prepTest (_ok 1) with ([], Right 1)
 
@@ -103,7 +104,7 @@ let _err
   : all w. all e. all a. e -> Result w e a
   = lam err.
     let id = gensym () in
-    ResultErr { warnings = _emptyMap, errors = mapInsert id err _emptyMap }
+    ResultErr { warnings = _emptyMap (), errors = mapInsert id err (_emptyMap ()) }
 
 utest match _prepTest (_err 1) with ([], Left [1]) then true else false
 with true
@@ -115,7 +116,7 @@ let _warn
   : all w. all e. w -> Result w e ()
   = lam warn.
     let id = gensym () in
-    ResultOk { warnings = mapInsert id warn _emptyMap, value = () }
+    ResultOk { warnings = mapInsert id warn (_emptyMap ()), value = () }
 
 utest _prepTest (_warn 'a') with (['a'], Right ())
 
@@ -135,7 +136,7 @@ let _asError
   : all w. all e. all a. Result w e a -> { warnings : Map Symbol w, errors : Map Symbol e }
   = lam start.
     switch start
-    case ResultOk r then { warnings = r.warnings, errors = _emptyMap }
+    case ResultOk r then { warnings = r.warnings, errors = (_emptyMap ()) }
     case ResultErr r then r
     end
 
@@ -216,7 +217,7 @@ with ()
 -- in the second input (if neither input has an error).
 let _withAnnotations
   : all w. all e. all a. all b. Result w e a -> Result w e b -> Result w e b
-  = _map2 (lam. lam b. b)
+  = lam r1. lam r2. _map2 (lam. lam b. b) r1 r2
 
 -- Perform a computation on the values present in three `Results` if
 -- none is an error. Preserves the errors and warnings of all inputs.
@@ -308,9 +309,9 @@ utest
             (lam e. utest _map5 f a b c d e with semantics f a b c d e using eq in ())))))
 with ()
 
--- Perform a computation on the values of a list. Produces a non-error
--- only if all individual computations produce a non-error. Preserves
--- all errors and warnings.
+-- Perform a computation on the values of a sequence. Produces a non-error only
+-- if all individual computations produce a non-error. Preserves all errors and
+-- warnings.
 let _mapM
   : all w. all e. all a. all b. (a -> Result w e b) -> [a] -> Result w e [b]
   = lam f.
@@ -332,7 +333,7 @@ let _mapM
             workErr (_mergeErrors acc (_asError (f a))) list
           else
             ResultErr acc
-    in workOk _emptyMap []
+    in workOk (_emptyMap ()) []
 
 utest
   -- Multiply by 10, error 0 on negative, warn 'a' on 0.
@@ -344,6 +345,61 @@ utest
   utest _prepTest (_mapM work [0, 1, 2, 0]) with (['a', 'a'], Right [0, 10, 20, 0]) in
   utest _prepTest (_mapM work [0, negi 1, 2]) with (['a'], Left [0]) in
   utest _prepTest (_mapM work [0, negi 1, negi 2]) with (['a'], Left [0, 0]) in
+  ()
+with ()
+
+-- Perform a computation on the values of a sequence while simultaneously
+-- folding an accumulator over the sequence from the left. Produces a non-error
+-- only if all individual computations produce a non-error. All errors and
+-- warnings are preserved.
+let _mapAccumLM : all w. all e. all a. all b. all c.
+  (a -> b -> (a, Result w e c)) -> a -> [b] -> (a, Result w e [c])
+  = lam f. lam acc.
+    recursive
+      let workOK : Map Symbol w -> (a, [c]) -> [b] -> (a, Result w e [c])
+        = lam accWarn. lam acc. lam seq.
+          match acc with (a, cs) in
+          match seq with [b] ++ seq then
+            switch f a b
+            case (a, ResultOk c) then
+              workOK (mapUnion accWarn c.warnings) (a, snoc cs c.value) seq
+            case (a, ResultErr c) then
+              workErr { c with warnings = mapUnion accWarn c.warnings } a seq
+            end
+          else
+            (a, ResultOk { warnings = accWarn, value = cs })
+      let workErr
+        : { warnings : Map Symbol w, errors : Map Symbol e }
+          -> a
+            -> [b]
+              -> (a, Result w e [c])
+        = lam accErr. lam a. lam seq.
+          match seq with [b] ++ seq then
+            match f a b with (a, c) in
+            workErr (_mergeErrors accErr (_asError c)) a seq
+          else
+            (a, ResultErr accErr)
+    in workOK (_emptyMap ()) (acc, [])
+
+utest
+  -- Multiply by 10 and reverse the sequence. Produces error 0 on negative and
+  -- warn 'a' on 0.
+  let work : [Int] -> Int -> ([Int], Result Char Int Int)
+    = lam acc. lam x.
+      let acc = cons x acc in
+      let x = if lti x 0 then _err 0 else
+        let res = _ok (muli x 10) in
+        if eqi x 0 then _withAnnotations (_warn 'a') res else res in
+      (acc, x) in
+  let _prepTest = lam p. (p.0, _prepTest p.1) in
+  utest _prepTest (_mapAccumLM work [] [0, 1, 2]) with
+    ([2, 1, 0], (['a'], Right [0, 10, 20])) in
+  utest _prepTest (_mapAccumLM work [] [0, negi 1, 2, 0]) with
+    ([0, 2, negi 1 ,0], (['a', 'a'], Left [0])) in
+  utest _prepTest (_mapAccumLM work [] [0, negi 1, negi 2]) with
+    ([negi 2, negi 1 ,0], (['a'], Left [0, 0])) in
+  utest _prepTest (_mapAccumLM work [] [0, 0, negi 2]) with
+    ([negi 2, 0 ,0], (['a', 'a'], Left [0])) in
   ()
 with ()
 
@@ -501,6 +557,113 @@ utest
             (lam e. utest _bind5 a b c d e f with semantics a b c d e f using eq in ())))))
 with ()
 
+
+-- Perform a computation only if both elements in the input are error
+-- free. Preserves warnings and errors, element-wise, but if the input have an
+-- error then the action won't run, thus any errors or warnings it would have
+-- been produced are not present in the result.
+let _bindParallel2
+  : all w1. all e1. all w2. all e2. all a1. all a2. all b1. all b2.
+    (Result w1 e1 a1, Result w2 e2 a2)
+      -> (a1 -> a2 -> (Result w1 e1 b1, Result w2 e2 b2))
+         -> (Result w1 e1 b1, Result w2 e2 b2)
+  = lam p. lam f.
+    switch p
+    case (ResultOk a1, ResultOk a2) then
+      match f a1.value a2.value with (b1, b2) in
+      (_warns a1.warnings b1, _warns a2.warnings b2)
+    case (a1, a2) then
+      (ResultErr (_asError a1), ResultErr (_asError a2))
+    end
+
+utest
+  let flip = lam x. lam y. (_ok y, _ok x) in
+  let _prepTest = lam p. (_prepTest p.0, _prepTest p.1) in
+
+  let r1 = _withAnnotations (_warn 'a') (_ok 1) in
+  let r2 = _withAnnotations (_warn 'b') (_ok 2) in
+  utest _prepTest (_bindParallel2 (r1, r2) flip) with
+    ((['a'], Right 2), (['b'], Right 1))
+  in
+
+  let r1 = _withAnnotations (_warn 'a') (_ok 1) in
+  let r2 = _withAnnotations (_warn 'b') (_err 2) in
+  utest _prepTest (_bindParallel2 (r1, r2) flip) with
+    ((['a'], Left []), (['b'], Left [2]))
+  in
+
+  let r1 = _withAnnotations (_warn 'a') (_err 1) in
+  let r2 = _withAnnotations (_warn 'b') (_ok 2) in
+  utest _prepTest (_bindParallel2 (r1, r2) flip) with
+    ((['a'], Left [1]), (['b'], Left []))
+  in
+
+  let r1 : Result Char Int Int = _withAnnotations (_warn 'a') (_err 1) in
+  let r2 = _withAnnotations (_warn 'b') (_err 2) in
+  utest _prepTest (_bindParallel2 (r1, r2) flip) with
+    ((['a'], Left [1]), (['b'], Left [2]))
+  in
+  ()
+  with ()
+
+-- Selects `r` if it is error free, otherwise selects `f` applied to `()`.
+let _orElse : all w. all e. all a. (() -> Result w e a) -> Result w e a -> Result w e a
+  = lam f. lam r.
+    match r with ResultOk _ then r else f ()
+
+utest
+  let r1 = _withAnnotations (_warn 'a') (_ok 1) in
+  let r2 = _withAnnotations (_warn 'b') (_ok 2) in
+  utest _prepTest (_orElse (lam. r2) r1) with (['a'], Right 1) in
+
+  let r1 = _withAnnotations (_warn 'a') (_ok 1) in
+  let r2 = _withAnnotations (_warn 'b') (_err 2) in
+  utest _prepTest (_orElse (lam. r2) r1) with (['a'], Right 1) in
+
+  let r1 = _withAnnotations (_warn 'a') (_err 1) in
+  let r2 = _withAnnotations (_warn 'b') (_ok 2) in
+  utest _prepTest (_orElse (lam. r2) r1) with (['b'], Right 2) in
+
+  let r1 : Result Char Int Int = _withAnnotations (_warn 'a') (_err 1) in
+  let r2 = _withAnnotations (_warn 'b') (_err 2) in
+  utest _prepTest (_orElse (lam. r2) r1) with (['b'], Left [2]) in
+  ()
+with ()
+
+-- Selects `r1` if it is error free, selects `r2` if it is error free and `r1`
+-- contains errors. If both `r1` and `r2` contains errors, these are merged. In
+-- all cases, warnings are propagated between `r1` and `r2`.
+-- NOTE(oerikss, 2023-05-10): We might not want to keep the semantics of the last
+-- sentence. On the other-hand, you can use orElse of you do not want share data
+-- between `r1` and `r2`.
+let _or : all w. all e. all a. Result w e a -> Result w e a -> Result w e a
+  = lam r1. lam r2.
+    switch (r1, r2)
+    case (ResultOk _, ResultOk r2) then _warns r2.warnings r1
+    case (ResultOk _, ResultErr r2) then _warns r2.warnings r1
+    case (ResultErr r1, ResultOk _) then _warns r1.warnings r2
+    case (ResultErr r1, ResultErr r2) then ResultErr (_mergeErrors r1 r2)
+    end
+
+utest
+  let r1 = _withAnnotations (_warn 'a') (_ok 1) in
+  let r2 = _withAnnotations (_warn 'b') (_ok 2) in
+  utest _prepTest (_or r1 r2) with (['a', 'b'], Right 1) in
+
+  let r1 = _withAnnotations (_warn 'a') (_ok 1) in
+  let r2 = _withAnnotations (_warn 'b') (_err 2) in
+  utest _prepTest (_or r1 r2) with (['a', 'b'], Right 1) in
+
+  let r1 = _withAnnotations (_warn 'a') (_err 1) in
+  let r2 = _withAnnotations (_warn 'b') (_ok 2) in
+  utest _prepTest (_or r1 r2) with (['a', 'b'], Right 2) in
+
+  let r1 : Result Char Int Int = _withAnnotations (_warn 'a') (_err 1) in
+  let r2 = _withAnnotations (_warn 'b') (_err 2) in
+  utest _prepTest (_or r1 r2) with (['a', 'b'], Left [1, 2]) in
+  ()
+with ()
+
 let result =
   -- Constructors
   { ok = _ok
@@ -523,5 +686,10 @@ let result =
   , bind3 = _bind3
   , bind4 = _bind4
   , bind5 = _bind5
+  , bindParallel2 = _bindParallel2
   , mapM = _mapM
+  , mapAccumLM = _mapAccumLM
+  -- Conditionals
+  , orElse = _orElse
+  , or = _or
   }

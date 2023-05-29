@@ -210,12 +210,12 @@ lang LambdaLiftInsertFreeVariables = MExprAst
       let body =
         foldr
           (lam freeVar : (Name, Type). lam body.
-            TmLam {ident = freeVar.0, tyAnnot = ityunknown_ info, tyIdent = freeVar.1,
+            TmLam {ident = freeVar.0, tyAnnot = ityunknown_ info, tyParam = freeVar.1,
                    body = body, info = info,
                    ty = TyUnknown {info = info}})
           t.body
           fv in
-      let annot = optionGetOr t.tyBody (sremoveUnknown t.tyAnnot) in
+      let annot = optionGetOr t.tyAnnot (sremoveUnknown t.tyBody) in
       let tyBody = updateBindingType fv annot in
       let tyAnnot = if null fv then t.tyAnnot else ityunknown_ t.info in
       let subExpr = lam info.
@@ -256,11 +256,11 @@ lang LambdaLiftInsertFreeVariables = MExprAst
           foldr
             (lam freeVar : (Name, Type). lam body.
               let info = infoTm body in
-              TmLam {ident = freeVar.0, tyAnnot = ityunknown_ info, tyIdent = freeVar.1,
+              TmLam {ident = freeVar.0, tyAnnot = ityunknown_ info, tyParam = freeVar.1,
                      body = body, info = info,
                      ty = TyUnknown {info = info}})
             bind.body fv in
-        let annot = optionGetOr bind.tyBody (sremoveUnknown bind.tyAnnot) in
+        let annot = optionGetOr bind.tyAnnot (sremoveUnknown bind.tyBody) in
         let tyBody = updateBindingType fv annot in
         let tyAnnot = if null fv then bind.tyAnnot else ityunknown_ bind.info in
         let body = insertFreeVariablesH solutions subMap body in
@@ -510,7 +510,7 @@ lang LambdaLiftTyAlls = MExprAst
   sem eraseUnboundTypesType bound =
   | TyVar t ->
     match mapLookup t.ident bound with Some (_, info) then
-      TyVar {t with info = info, level = 1}
+      TyVar {t with info = info}
     else TyUnknown {info = t.info}
   | ty -> smap_Type_Type (eraseUnboundTypesType bound) ty
 
@@ -789,13 +789,16 @@ utest liftLambdas liftMatchEls with expected using eqExpr in
 let conAppLift = preprocess (bindall_ [
   type_ "Tree" [] (tyvariant_ []),
   condef_ "Leaf" (tyarrow_ tyint_ (tycon_ "Tree")),
-  conapp_ "Leaf" fapp
+  ulet_ "x" (conapp_ "Leaf" fapp),
+  unit_
 ]) in
 let expected = preprocess (bindall_ [
   type_ "Tree" [] (tyvariant_ []),
   condef_ "Leaf" (tyarrow_ tyint_ (tycon_ "Tree")),
   fdef,
-  conapp_ "Leaf" (app_ (var_ "f") (int_ 1))]) in
+  ulet_ "x" (conapp_ "Leaf" (app_ (var_ "f") (int_ 1))),
+  unit_
+]) in
 
 -- NOTE(larshum, 2022-09-15): Compare using eqString as equality of TmType has
 -- not been implemented.

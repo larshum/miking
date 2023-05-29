@@ -299,7 +299,7 @@ lang LamAst = Ast
   syn Expr =
   | TmLam {ident : Name,
            tyAnnot : Type,
-           tyIdent : Type,
+           tyParam : Type,
            body : Expr,
            ty : Type,
            info : Info}
@@ -323,9 +323,9 @@ lang LamAst = Ast
 
   sem smapAccumL_Expr_TypeLabel (f : acc -> Type -> (acc, Type)) (acc : acc) =
   | TmLam t ->
-    match f acc t.tyIdent with (acc, tyIdent) in
+    match f acc t.tyParam with (acc, tyParam) in
     match f acc t.ty with (acc, ty) in
-    (acc, TmLam {t with tyIdent = tyIdent, ty = ty})
+    (acc, TmLam {t with tyParam = tyParam, ty = ty})
 
   sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
   | TmLam t ->
@@ -1409,22 +1409,17 @@ lang ConTypeAst = Ast
   | TyCon r -> r.info
 end
 
--- A Level denotes the nesting level of the let that a type variable is introduced by
-type Level = Int
-
 lang VarTypeAst = Ast
   syn Type =
   -- Rigid type variable
   | TyVar  {info     : Info,
-            ident    : Name,
-            level    : Level}
+            ident    : Name}
 
   sem tyWithInfo (info : Info) =
   | TyVar t -> TyVar {t with info = info}
 
   sem infoTy =
   | TyVar t -> t.info
-
 end
 
 lang VarSortAst

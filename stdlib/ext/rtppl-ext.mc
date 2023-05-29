@@ -31,6 +31,6 @@ external externalBatchedInference : (() -> Opaque) -> Timespec -> [Opaque]
 
 mexpr
 
-utest setSignalHandler sigint (lam. print "hello") with true using lam. lam. true in
+utest setSigintHandler (lam. print "hello") with true using lam. lam. true in
 
 ()

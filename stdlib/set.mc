@@ -58,10 +58,10 @@ let setToSeq : all a. Set a -> [a] = lam s. mapKeys s
 
 -- Two sets are equal, where equality is determined by the compare function.
 -- Both sets are assumed to have the same equality function.
-let setEq : all a. Set a -> Set a -> Bool = mapEq (lam. lam. true)
+let setEq : all a. Set a -> Set a -> Bool = lam m1. lam m2. mapEq (lam. lam. true) m1 m2
 
 -- `setCmp` provides comparison over sets.
-let setCmp : all a. Set a -> Set a -> Int = mapCmp (lam. lam. 0)
+let setCmp : all a. Set a -> Set a -> Int = lam m1. lam m2. mapCmp (lam. lam. 0) m1 m2
 
 -- `setChoose s` chooses one element from the set `s`, giving `None ()` if `s`
 -- is empty.
@@ -78,6 +78,9 @@ lam s.
 -- s.
 let setAny: all a. (a -> Bool) -> Set a -> Bool = lam p. lam s.
   mapFoldWithKey (lam acc. lam v. lam. if acc then acc else p v) false s
+
+-- `setOfKeys m` returns the keys of `m` as a set.
+let setOfKeys : all k. all v. Map k v -> Set k = lam m. mapMap (lam. ()) m
 
 mexpr
 
@@ -146,5 +149,10 @@ utest setAny (eqi 0) s5 with false in
 
 let sFold = setOfSeq subi [1,2,3,4,5] in
 utest setFold (lam acc. lam v. addi v acc) 0 sFold with 15 in
+
+let m = mapFromSeq subi [(1, "1"), (2, "2"), (3, "3")] in
+let s = setOfSeq subi [1, 2, 3] in
+
+utest setEq (setOfKeys m) s with true in
 
 ()

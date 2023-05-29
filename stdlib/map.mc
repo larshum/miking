@@ -110,6 +110,10 @@ let mapLookupApplyOrElse : all k. all v1. all v2.
   lam f1. lam f2. lam k. lam m.
   mapFindApplyOrElse f1 f2 k m
 
+let mapLookupOr : all k. all v. v -> k -> Map k v -> v =
+  lam dv. lam k. lam m.
+  mapLookupOrElse (lam. dv) k m
+
 let mapIsEmpty : all k. all v. Map k v -> Bool = lam m.
   use AVLTreeImpl in
   avlIsEmpty m.root
@@ -139,12 +143,12 @@ let mapUnionWith : all k. all v. (v -> v -> v) -> Map k v -> Map k v -> Map k v 
   use AVLTreeImpl in
   {l with root = avlUnionWith l.cmp f l.root r.root}
 
-let mapIntersectWith : all k. all v. (v -> v -> v) -> Map k v -> Map k v -> Map k v =
+let mapIntersectWith : all k. all a. all b. all c. (a -> b -> c) -> Map k a -> Map k b -> Map k c =
   lam f. lam l. lam r.
   use AVLTreeImpl in
-  {l with root = avlIntersectWith l.cmp f l.root r.root}
+  {cmp = l.cmp, root = avlIntersectWith l.cmp f l.root r.root}
 
-let mapDifference : all k. all v. Map k v -> Map k v -> Map k v =
+let mapDifference : all k. all v. all v2. Map k v -> Map k v2 -> Map k v =
   lam l. lam r.
   use AVLTreeImpl in
   {l with root = avlDifference l.cmp l.root r.root}
@@ -208,20 +212,44 @@ let mapMapK
     (v1 -> (v2 -> a) -> a) -> Map k v1 -> (Map k v2 -> a) -> a
   = lam f. mapMapWithKeyK (lam. f)
 
+-- `mapUpdate k f m` looks up `k` in `m` and applies `f` to the result of this
+-- lookup. If the result of this application is `Some v`, the binding `k` in `m`
+-- is updated to bind to `v`. Otherwise, if the result is `None _`, the binding
+-- `k` is removed from `m`.
+-- OPT(oerikss, 2023-04-27): We might be able to reduce this to one map access
+-- if we operate directly on the AVLTree.
+let mapUpdate : all k. all v. k -> (Option v -> Option v) -> Map k v -> Map k v
+  = lam k. lam f. lam m.
+    switch f (mapLookup k m)
+    case Some v then mapInsert k v m
+    case None _ then mapRemove k m
+    end
+
+-- `mapGetMin m` returns the smallest key-value pair of `m`, or None ()
+-- if the map is empty.
+let mapGetMin : all k. all v. Map k v -> Option (k, v) =
+  lam m.
+    if mapIsEmpty m then None ()
+    else
+      use AVLTreeImpl in
+      match avlSplitFirst m.root with (k, v, _) in
+      Some (k, v)
+
 mexpr
 
 let m = mapEmpty subi in
 
-utest
-  match mapChoose m with None _ then true else false
-with true in
+utest mapChoose m with None () in
+utest mapGetMin m with None () in
 
 utest mapLookupOrElse (lam. 2) 1 m with 2 in
 utest mapLookupApplyOrElse (lam. 2) (lam. 3) 1 m with 3 in
 utest mapLength m with 0 in
 utest mapIsEmpty m with true in
 
-utest mapLookup 1 m with None () using optionEq eqString in
+utest mapLookup 1 m with None () using optionEq eqi in
+
+let m = mapEmpty subi in
 
 let m = mapInsert 1 "1" m in
 let m = mapInsert 2 "2" m in
@@ -315,5 +343,32 @@ utest
   (mapMapK (lam val. lam k. k (join [val, val])) m (lam m. mapBindings m))
   with [(1, "11"), (2, "22"), (3, "33")]
 in
+
+let m = mapFromSeq subi [
+  (1, "1"),
+  (2, "2"),
+  (3, "3")
+] in
+utest mapBindings (mapUpdate 1 (lam. Some "2") m)
+  with [(1, "2"), (2, "2"), (3, "3")]
+in
+utest mapBindings (mapUpdate 4 (lam. Some "4") m)
+  with [(1, "1"), (2, "2"), (3, "3"), (4, "4")]
+in
+utest mapBindings (mapUpdate 1 (lam. None ()) m)
+  with [(2, "2"), (3, "3")]
+in
+utest mapBindings (mapUpdate 4 (lam. None ()) m)
+  with [(1, "1"), (2, "2"), (3, "3")]
+in
+utest
+  mapBindings
+    (mapUpdate 2
+       (lam v. match v with Some v then Some (join [v,v]) else None ())
+       m)
+  with [(1, "1"), (2, "22"), (3, "3")]
+in
+
+utest mapGetMin m with Some (1, "1") in
 
 ()

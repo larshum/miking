@@ -86,7 +86,7 @@ let _conTy = lam id.
   TyCon {ident = id, info = _utestInfo}
 let _varTy = lam id.
   use MExprAst in
-  TyVar {ident = id, level = 1, info = _utestInfo}
+  TyVar {ident = id, info = _utestInfo}
 let _recordTy = lam fields.
   use MExprAst in
   let fields = map (lam f. match f with (s, ty) in (stringToSid s, ty)) fields in
@@ -147,7 +147,7 @@ let _var = lam id. lam ty.
   TmVar {ident = id, ty = ty, info = _utestInfo, frozen = false}
 let _lam = lam id. lam ty. lam body.
   use MExprAst in
-  TmLam {ident = id, tyAnnot = ty, tyIdent = ty, body = body,
+  TmLam {ident = id, tyAnnot = ty, tyParam = ty, body = body,
          ty = _tyarrows [ty, tyTm body], info = _utestInfo}
 let _seq = lam tms. lam ty.
   use MExprAst in
