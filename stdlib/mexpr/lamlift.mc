@@ -337,7 +337,7 @@ lang LambdaLiftSolveEquations = LambdaLift + MExprCallGraph
   | {ident = ident, body = body, info = info} ->
     recursive let collectParameters = lam params. lam body.
       match body with TmLam t then
-        collectParameters (mapInsert t.ident t.tyIdent params) t.body
+        collectParameters (mapInsert t.ident t.tyParam params) t.body
       else params
     in
     let params = collectParameters (mapEmpty nameCmp) body in

@@ -331,8 +331,8 @@ let inRecursiveBinding = preprocess (bindall_ [
 let extracted = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 2))),
   ureclets_ [
-    ("g", ulam_ "x" (app_ (var_ "f") (addi_ (var_ "x") (int_ 1)))),
-    ("t", ulam_ "x" (ulam_ "" (app_ (var_ "g") (var_ "x"))))],
+    ("t", ulam_ "x" (ulam_ "" (app_ (var_ "g") (var_ "x")))),
+    ("g", ulam_ "x" (app_ (var_ "f") (addi_ (var_ "x") (int_ 1))))],
   int_ 0
 ]) in
 match extractAccelerate inRecursiveBinding with (m, ast) in
