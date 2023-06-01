@@ -3,10 +3,102 @@
 --
 -- Defines auxiliary functions for the map intrinsics.
 
+include "avl.mc"
 include "option.mc"
 include "seq.mc"
 include "string.mc"
 
+-- NOTE(larshum, 2023-03-05): Below follows the implementation of the (as of
+-- writing) intrinsic functions of the map data type, making use of the native
+-- AVL tree implementation.
+type Map k v = {cmp : k -> k -> Int, root : AVL k v}
+
+let mapEmpty : all k. all v. (k -> k -> Int) -> Map k v = lam cmp.
+  use AVLTreeImpl in
+  {cmp = cmp, root = avlEmpty ()}
+
+let mapInsert : all k. all v. k -> v -> Map k v -> Map k v =
+  lam k. lam v. lam m.
+  use AVLTreeImpl in
+  {m with root = avlInsert m.cmp k v m.root}
+
+let mapRemove : all k. all v. k -> Map k v -> Map k v =
+  lam k. lam m.
+  use AVLTreeImpl in
+  {m with root = avlRemove m.cmp k m.root}
+
+let mapFindExn : all k. all v. k -> Map k v -> v =
+  lam k. lam m.
+  use AVLTreeImpl in
+  optionGetOrElse
+    (lam. error "mapFindExn: key not found")
+    (avlLookup m.cmp k m.root)
+
+let mapFindOrElse : all k. all v. (() -> v) -> k -> Map k v -> v =
+  lam f. lam k. lam m.
+  use AVLTreeImpl in
+  optionGetOrElse f (avlLookup m.cmp k m.root)
+
+let mapFindApplyOrElse : all k. all v1. all v2.
+  (v1 -> v2) -> (() -> v2) -> k -> Map k v1 -> v2 =
+  lam fnThn. lam fnEls. lam k. lam m.
+  use AVLTreeImpl in
+  optionMapOrElse fnEls fnThn (avlLookup m.cmp k m.root)
+
+let mapBindings : all k. all v. Map k v -> [(k, v)] = lam m.
+  use AVLTreeImpl in
+  avlToSeq [] m.root
+
+let mapChooseExn : all k. all v. Map k v -> (k, v) = lam m.
+  use AVLTreeImpl in
+  optionGetOrElse (lam. error "mapChooseExn: empty map") (avlChoose m.root)
+
+let mapChooseOrElse : all k. all v. (() -> (k, v)) -> Map k v -> (k, v) =
+  lam f. lam m.
+  use AVLTreeImpl in
+  optionGetOrElse f (avlChoose m.root)
+
+let mapSize : all k. all v. Map k v -> Int = lam m.
+  use AVLTreeImpl in
+  avlSize m.root
+
+let mapMem : all k. all v. k -> Map k v -> Bool = lam k. lam m.
+  use AVLTreeImpl in
+  optionIsSome (avlLookup m.cmp k m.root)
+
+let mapAny : all k. all v. (k -> v -> Bool) -> Map k v -> Bool =
+  lam f. lam m.
+  use AVLTreeImpl in
+  let anyFn = lam acc. lam k. lam v.
+    if acc then acc else f k v
+  in
+  avlFold anyFn false m.root
+
+let mapMapWithKey : all k. all v1. all v2. (k -> v1 -> v2) -> Map k v1 -> Map k v2 =
+  lam f. lam m.
+  use AVLTreeImpl in
+  {cmp = m.cmp, root = avlMap f m.root}
+
+let mapMap : all k. all v1. all v2. (v1 -> v2) -> Map k v1 -> Map k v2 =
+  lam f. lam m.
+  mapMapWithKey (lam. lam v. f v) m
+
+let mapFoldWithKey : all k. all v. all a. (a -> k -> v -> a) -> a -> Map k v -> a =
+  lam f. lam acc. lam m.
+  use AVLTreeImpl in
+  avlFold f acc m.root
+
+let mapEq : all k. all v. (v -> v -> Bool) -> Map k v -> Map k v -> Bool =
+  lam eqv. lam m1. lam m2.
+  use AVLTreeImpl in
+  avlEq m1.cmp eqv m1.root m2.root
+
+let mapCmp : all k. all v. (v -> v -> Int) -> Map k v -> Map k v -> Int =
+  lam cmpv. lam m1. lam m2.
+  use AVLTreeImpl in
+  avlCmp m1.cmp cmpv m1.root m2.root
+
+let mapGetCmpFun : all k. all v. Map k v -> (k -> k -> Int) = lam m. m.cmp
 
 -- Aliases
 let mapLength : all k. all v. Map k v -> Int = lam m. mapSize m
@@ -18,11 +110,18 @@ let mapLookupApplyOrElse : all k. all v1. all v2.
   lam f1. lam f2. lam k. lam m.
   mapFindApplyOrElse f1 f2 k m
 
-let mapIsEmpty : all k. all v. Map k v -> Bool = lam m. eqi (mapSize m) 0
+let mapLookupOr : all k. all v. v -> k -> Map k v -> v =
+  lam dv. lam k. lam m.
+  mapLookupOrElse (lam. dv) k m
+
+let mapIsEmpty : all k. all v. Map k v -> Bool = lam m.
+  use AVLTreeImpl in
+  avlIsEmpty m.root
 
 let mapLookup : all k. all v. k -> Map k v -> Option v =
   lam k. lam m.
-    mapFindApplyOrElse (lam v. Some v) (lam. None ()) k m
+  use AVLTreeImpl in
+  avlLookup m.cmp k m.root
 
 let mapInsertWith : all k. all v. (v -> v -> v) -> k -> v -> Map k v -> Map k v =
   lam f. lam k. lam v. lam m.
@@ -30,18 +129,34 @@ let mapInsertWith : all k. all v. (v -> v -> v) -> k -> v -> Map k v -> Map k v 
       mapInsert k (f prev v) m
     else mapInsert k v m
 
+let mapMerge : all k. all a. all b. all c.
+  (Option a -> Option b -> Option c) -> Map k a -> Map k b -> Map k c =
+  lam f. lam l. lam r.
+  use AVLTreeImpl in
+  {cmp = l.cmp, root = avlMerge l.cmp f l.root r.root}
+
 let mapUnion : all k. all v. Map k v -> Map k v -> Map k v = lam l. lam r.
-  foldl (lam acc. lam binding : (k, v). mapInsert binding.0 binding.1 acc)
-        l (mapBindings r)
+  use AVLTreeImpl in
+  {l with root = avlUnionWith l.cmp (lam. lam rv. rv) l.root r.root}
 
 let mapUnionWith : all k. all v. (v -> v -> v) -> Map k v -> Map k v -> Map k v = lam f. lam l. lam r.
-  foldl (lam acc. lam binding : (k, v). mapInsertWith f binding.0 binding.1 acc)
-        l (mapBindings r)
+  use AVLTreeImpl in
+  {l with root = avlUnionWith l.cmp f l.root r.root}
+
+let mapIntersectWith : all k. all a. all b. all c. (a -> b -> c) -> Map k a -> Map k b -> Map k c =
+  lam f. lam l. lam r.
+  use AVLTreeImpl in
+  {cmp = l.cmp, root = avlIntersectWith l.cmp f l.root r.root}
+
+let mapDifference : all k. all v. all v2. Map k v -> Map k v2 -> Map k v =
+  lam l. lam r.
+  use AVLTreeImpl in
+  {l with root = avlDifference l.cmp l.root r.root}
 
 let mapFromSeq : all k. all v. (k -> k -> Int) -> [(k, v)] -> Map k v =
   lam cmp. lam bindings.
-  foldl (lam acc. lam binding : (k, v). mapInsert binding.0 binding.1 acc)
-        (mapEmpty cmp) bindings
+  use AVLTreeImpl in
+  {cmp = cmp, root = avlFromSeq cmp bindings}
 
 let mapKeys : all k. all v. Map k v -> [k] = lam m.
   mapFoldWithKey (lam ks. lam k. lam. snoc ks k) [] m
@@ -76,22 +191,77 @@ let mapAll : all k. all v. (v -> Bool) -> Map k v -> Bool = lam f. lam m.
 -- `mapChoose m` chooses one binding from `m`, giving `None ()` if `m` is
 -- empty.
 let mapChoose : all k. all v. Map k v -> Option (k, v) = lam m.
-  if mapIsEmpty m then None () else Some (mapChooseExn m)
+  use AVLTreeImpl in
+  avlChoose m.root
+
+-- `mapMapWithKeyK f m k` maps the continuation passing function `f` over the
+-- values of `m`, passing the result of the mapping to the continuation `k`.
+let mapMapWithKeyK
+  : all k. all v1. all v2. all a.
+    (k -> v1 -> (v2 -> a) -> a) -> Map k v1 -> (Map k v2 -> a) -> a
+  = lam f. lam m. lam k.
+  mapFoldWithKey
+    (lam k. lam key. lam val.
+      (lam m. f key val (lam val. k (mapInsert key val m))))
+    k m (mapEmpty (mapGetCmpFun m))
+
+-- `mapMapK f m k` maps the continuation passing function `f` over the values of
+-- `m`, passing the result of the mapping to the continuation `k`.
+let mapMapK
+  : all k. all v1. all v2. all a.
+    (v1 -> (v2 -> a) -> a) -> Map k v1 -> (Map k v2 -> a) -> a
+  = lam f. mapMapWithKeyK (lam. f)
+
+-- `mapUpdate k f m` looks up `k` in `m` and applies `f` to the result of this
+-- lookup. If the result of this application is `Some v`, the binding `k` in `m`
+-- is updated to bind to `v`. Otherwise, if the result is `None _`, the binding
+-- `k` is removed from `m`.
+-- OPT(oerikss, 2023-04-27): We might be able to reduce this to one map access
+-- if we operate directly on the AVLTree.
+let mapUpdate : all k. all v. k -> (Option v -> Option v) -> Map k v -> Map k v
+  = lam k. lam f. lam m.
+    switch f (mapLookup k m)
+    case Some v then mapInsert k v m
+    case None _ then mapRemove k m
+    end
+
+-- `mapGetMin m` returns the smallest key-value pair of `m`, or None ()
+-- if the map is empty.
+let mapGetMin : all k. all v. Map k v -> Option (k, v) =
+  lam m.
+    if mapIsEmpty m then None ()
+    else
+      use AVLTreeImpl in
+      match avlSplitFirst m.root with (k, v, _) in
+      Some (k, v)
+
+-- `mapFilterWithKey p m` filters the map `m` with the predicate `p`.
+let mapFilterWithKey : all k. all v. (k -> v -> Bool) -> Map k v -> Map k v
+  = lam p. lam m.
+    mapFoldWithKey
+      (lam m. lam k. lam v. if p k v then mapInsert k v m else m)
+      (mapEmpty (mapGetCmpFun m))
+      m
+
+-- `mapFilter p m` filters the map `m` with the predicate `p`.
+let mapFilter : all k. all v. (v -> Bool) -> Map k v -> Map k v
+  = lam p. mapFilterWithKey (lam. p)
 
 mexpr
 
 let m = mapEmpty subi in
 
-utest
-  match mapChoose m with None _ then true else false
-with true in
+utest mapChoose m with None () in
+utest mapGetMin m with None () in
 
 utest mapLookupOrElse (lam. 2) 1 m with 2 in
 utest mapLookupApplyOrElse (lam. 2) (lam. 3) 1 m with 3 in
 utest mapLength m with 0 in
 utest mapIsEmpty m with true in
 
-utest mapLookup 1 m with None () using optionEq eqString in
+utest mapLookup 1 m with None () using optionEq eqi in
+
+let m = mapEmpty subi in
 
 let m = mapInsert 1 "1" m in
 let m = mapInsert 2 "2" m in
@@ -171,5 +341,66 @@ utest mapAllWithKey (lam i. lam. lti i 123) m with false in
 utest mapAll (lam str. geqi (length str) 1) m with true in
 utest mapAll (lam str. leqi (length str) 3) m with true in
 utest mapAll (lam str. lti (length str) 2) m with false in
+
+let m = mapFromSeq subi
+  [ (1, "1")
+  , (2, "2")
+  , (3, "3")
+  ] in
+utest
+  (mapMapWithKeyK (lam key. lam val. lam k. k (key, val)) m (lam m. mapBindings m))
+  with [(1, (1, "1")), (2, (2, "2")), (3, (3, "3"))]
+in
+utest
+  (mapMapK (lam val. lam k. k (join [val, val])) m (lam m. mapBindings m))
+  with [(1, "11"), (2, "22"), (3, "33")]
+in
+
+let m = mapFromSeq subi [
+  (1, "1"),
+  (2, "2"),
+  (3, "3")
+] in
+utest mapBindings (mapUpdate 1 (lam. Some "2") m)
+  with [(1, "2"), (2, "2"), (3, "3")]
+in
+utest mapBindings (mapUpdate 4 (lam. Some "4") m)
+  with [(1, "1"), (2, "2"), (3, "3"), (4, "4")]
+in
+utest mapBindings (mapUpdate 1 (lam. None ()) m)
+  with [(2, "2"), (3, "3")]
+in
+utest mapBindings (mapUpdate 4 (lam. None ()) m)
+  with [(1, "1"), (2, "2"), (3, "3")]
+in
+utest
+  mapBindings
+    (mapUpdate 2
+       (lam v. match v with Some v then Some (join [v,v]) else None ())
+       m)
+  with [(1, "1"), (2, "22"), (3, "3")]
+in
+
+utest mapGetMin m with Some (1, "1") in
+
+let m = mapFromSeq subi [
+  (1, "1"),
+  (2, "2"),
+  (3, "3")
+] in
+utest
+  mapBindings (mapFilterWithKey (lam k. lam v. and (gti k 1) (eqString v "3")) m)
+  with [(3, "3")]
+in
+
+let m = mapFromSeq subi [
+  (1, "1"),
+  (2, "2"),
+  (3, "3")
+] in
+utest
+  mapBindings (mapFilter (lam v. or (eqString v "1") (eqString v "3")) m)
+  with [(1, "1"), (3, "3")]
+in
 
 ()

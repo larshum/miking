@@ -42,7 +42,8 @@
   test-tune\
   test-sundials\
   test-ipopt\
-  test-accelerate
+  test-accelerate\
+  test-jvm
 
 all: build
 
@@ -52,12 +53,12 @@ boot:
 install-boot: boot
 	@./make.sh install-boot
 
-lite: install-boot
+lite: boot
 	@./make.sh lite
 
 test: test-boot
 
-build: install-boot
+build: boot
 # Run the complete bootstrapping process to compile `mi`.
 	@./make.sh
 
@@ -66,7 +67,7 @@ build-mi:
 # The result is named `build/mi-tmp`.
 	@./make.sh build-mi
 
-install: build
+install: build install-boot
 	@./make.sh install
 
 lint:
@@ -87,7 +88,8 @@ test-all:\
   test-compile\
   test-run\
   test-js\
-	test-tune
+  test-tune\
+  test-jvm
 	@./make.sh lint
 
 # The same as test-all but prunes utests whose external dependencies are not met
@@ -129,19 +131,19 @@ test-run: build
 test-run-all: build
 	@$(MAKE) -s -f test-run.mk all
 
-test-boot-run: install-boot
+test-boot-run: boot
 	@$(MAKE) -s -f test-boot-run.mk selected
 
-test-boot-run-all: install-boot
+test-boot-run-all: boot
 	@$(MAKE) -s -f test-boot-run.mk all
 
-test-boot: install-boot
+test-boot: boot
 	@$(MAKE) -s -f test-boot.mk selected
 
 test-boot-py: boot
 	@$(MAKE) -s -f test-boot.mk py
 
-test-boot-all: install-boot
+test-boot-all: boot
 	@$(MAKE) -s -f test-boot.mk all
 
 test-par: build
@@ -159,5 +161,8 @@ test-ipopt: build
 test-accelerate: build
 	@$(MAKE) -s -f test-accelerate.mk
 
-test-js: install-boot
+test-jvm: build
+	@$(MAKE) -s -f test-jvm.mk
+
+test-js: build
 	@$(MAKE) -s -f test-js.mk

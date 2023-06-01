@@ -24,6 +24,8 @@ include "ast-builder.mc"
 include "cmp.mc"
 include "const-arity.mc"
 include "index.mc"
+include "free-vars.mc"
+
 
 type IName = Int
 
@@ -31,7 +33,7 @@ type IName = Int
 -- BASE FRAGMENT --
 -------------------
 
-lang CFABase = Ast + LetAst + MExprIndex + MExprPrettyPrint
+lang CFABase = Ast + LetAst + MExprIndex + MExprFreeVars + MExprPrettyPrint
 
   syn Constraint =
   -- Intentionally left blank
@@ -1374,29 +1376,6 @@ lang RefOpCFA = CFA + ConstCFA + RefOpAst
   -- | CDeRef _ -> []
 end
 
--- TODO(dlunde,2021-11-11): Add flow constraints for maps and map operations?
-lang MapCFA = CFA + ConstCFA + MapAst
-  sem generateConstraintsConst info ident =
-  -- | CMapEmpty _ -> []
-  -- | CMapInsert _ -> []
-  -- | CMapRemove _ -> []
-  -- | CMapFindExn _ -> []
-  -- | CMapFindOrElse _ -> []
-  -- | CMapFindApplyOrElse _ -> []
-  -- | CMapBindings _ -> []
-  -- | CMapChooseExn _ -> []
-  -- | CMapChooseOrElse _ -> []
-  -- | CMapSize _ -> []
-  -- | CMapMem _ -> []
-  -- | CMapAny _ -> []
-  -- | CMapMap _ -> []
-  -- | CMapMapWithKey _ -> []
-  -- | CMapFoldWithKey _ -> []
-  -- | CMapEq _ -> []
-  -- | CMapCmp _ -> []
-  -- | CMapGetCmpFun _ -> []
-end
-
 -- TODO(dlunde,2021-11-11): Mutability complicates the analysis, but could
 -- probably be added.
 lang TensorOpCFA = CFA + ConstCFA + TensorOpAst
@@ -1558,8 +1537,7 @@ lang MExprCFA = CFA +
   FloatIntConversionCFA + BoolCFA + CmpIntCFA + CmpFloatCFA + CharCFA +
   CmpCharCFA + IntCharConversionCFA + FloatStringConversionCFA + SymbCFA +
   CmpSymbCFA + SeqOpCFA + FileOpCFA + IOCFA + RandomNumberGeneratorCFA +
-  SysCFA + TimeCFA + ConTagCFA + RefOpCFA + MapCFA + TensorOpCFA +
-  BootParserCFA +
+  SysCFA + TimeCFA + ConTagCFA + RefOpCFA + TensorOpCFA + BootParserCFA +
 
   -- Patterns
   NamedPatCFA + SeqTotPatCFA + SeqEdgePatCFA + RecordPatCFA + DataPatCFA +
@@ -1702,11 +1680,6 @@ lang KCFA = CFABase
         iter (addi i 1) pprintenv graph
     in
     iter 1 pprintenv graph
-
-  -- Returns the set of free variables for a given expression.
-  sem freeVars: Set Name -> Expr -> Set Name
-  sem freeVars acc =
-  | t -> sfold_Expr_Expr freeVars acc t
 
   -- Base constraint generation function (must still be included manually in
   -- constraintGenFuns)
@@ -1851,7 +1824,7 @@ lang KCFA = CFABase
   sem ctxEnvFilterFree: IndexMap -> Expr -> CtxEnv -> CtxEnv
   sem ctxEnvFilterFree im e =
   | env ->
-    let free: Set Name = freeVars (setEmpty nameCmp) e in
+    let free: Set Name = freeVars e in
     mapFoldWithKey (lam acc. lam n. lam ctx.
         if setMem (int2name im n) free then mapInsert n ctx acc
         else acc
@@ -2078,9 +2051,6 @@ lang VarKCFA = KCFA + KBaseConstraint + VarAst
 
   sem exprName =
   | TmVar t -> t.ident
-
-  sem freeVars acc =
-  | TmVar t -> setInsert t.ident acc
 end
 
 lang LamKCFA = KCFA + KBaseConstraint + LamAst
@@ -2120,19 +2090,11 @@ lang LamKCFA = KCFA + KBaseConstraint + LamAst
   -- an `AVLam`. Hence, we do nothing here.
   sem collectConstraints ctx cgfs acc =
   | TmLam t -> acc
-
-  sem freeVars acc =
-  | TmLam t ->
-    setRemove t.ident (freeVars acc t.body)
 end
 
 lang LetKCFA = KCFA + LetAst
   sem exprName =
   | TmLet t -> exprName t.inexpr
-
-  sem freeVars acc =
-  | TmLet t ->
-    setRemove t.ident (freeVars (freeVars acc t.body) t.inexpr)
 end
 
 lang RecLetsKCFA = KCFA + LamKCFA + RecLetsAst
@@ -2159,13 +2121,6 @@ lang RecLetsKCFA = KCFA + LamKCFA + RecLetsAst
     ) (zip idents bindings) in
     let env = foldl (lam env. lam i. ctxEnvAdd i ctx env) env idents in
     (env, cstrs)
-
-  sem freeVars acc =
-  | TmRecLets t ->
-    let acc = foldl (lam acc. lam b.
-      freeVars acc b.body) (freeVars acc t.inexpr) t.bindings in
-    foldl (lam acc. lam b. setRemove b.ident acc) acc t.bindings
-
 end
 
 lang ConstKCFA = KCFA + ConstAst + KBaseConstraint + Cmp
@@ -2308,9 +2263,6 @@ lang AppKCFA = KCFA + ConstKCFA + KBaseConstraint + LamKCFA + AppAst + MExprArit
 
   sem propagateConstraintConst
   : (IName,Ctx) -> [(IName,Ctx)] -> CFAGraph -> Const -> CFAGraph
-
-  sem freeVars acc =
-  | TmApp t -> freeVars (freeVars acc t.lhs) t.rhs
 end
 
 lang RecordKCFA = KCFA + KBaseConstraint + RecordAst
@@ -3155,29 +3107,6 @@ lang RefOpKCFA = KCFA + ConstKCFA + RefOpAst
   -- | CDeRef _ -> []
 end
 
--- TODO(dlunde,2021-11-11): Add flow constraints for maps and map operations?
-lang MapKCFA = KCFA + ConstKCFA + MapAst
-  sem generateConstraintsConst info ident =
-  -- | CMapEmpty _ -> []
-  -- | CMapInsert _ -> []
-  -- | CMapRemove _ -> []
-  -- | CMapFindExn _ -> []
-  -- | CMapFindOrElse _ -> []
-  -- | CMapFindApplyOrElse _ -> []
-  -- | CMapBindings _ -> []
-  -- | CMapChooseExn _ -> []
-  -- | CMapChooseOrElse _ -> []
-  -- | CMapSize _ -> []
-  -- | CMapMem _ -> []
-  -- | CMapAny _ -> []
-  -- | CMapMap _ -> []
-  -- | CMapMapWithKey _ -> []
-  -- | CMapFoldWithKey _ -> []
-  -- | CMapEq _ -> []
-  -- | CMapCmp _ -> []
-  -- | CMapGetCmpFun _ -> []
-end
-
 -- TODO(dlunde,2021-11-11): Mutability complicates the analysis, but could
 -- probably be added.
 lang TensorOpKCFA = KCFA + ConstKCFA + TensorOpAst
@@ -3347,8 +3276,7 @@ lang MExprKCFA = KCFA +
   FloatIntConversionKCFA + BoolKCFA + CmpIntKCFA + CmpFloatKCFA + CharKCFA +
   CmpCharKCFA + IntCharConversionKCFA + FloatStringConversionKCFA + SymbKCFA +
   CmpSymbKCFA + SeqOpKCFA + FileOpKCFA + IOKCFA + RandomNumberGeneratorKCFA +
-  SysKCFA + TimeKCFA + ConTagKCFA + RefOpKCFA + MapKCFA + TensorOpKCFA +
-  BootParserKCFA +
+  SysKCFA + TimeKCFA + ConTagKCFA + RefOpKCFA + TensorOpKCFA + BootParserKCFA +
 
   -- Patterns
   NamedPatKCFA + SeqTotPatKCFA + SeqEdgePatKCFA + RecordPatKCFA + DataPatKCFA +

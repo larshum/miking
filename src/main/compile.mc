@@ -22,6 +22,7 @@ include "ocaml/wrap-in-try-with.mc"
 include "pmexpr/demote.mc"
 include "tuning/context-expansion.mc"
 include "tuning/tune-file.mc"
+include "jvm/compile.mc"
 
 lang MCoreCompile =
   BootParser +
@@ -54,8 +55,6 @@ let insertTunedOrDefaults = lam options : Options. lam ast. lam file.
 let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
   use MCoreCompile in
     let log = mkPhaseLogState options.debugPhases in
-    let ast = symbolize ast in
-    endPhaseStats log "symbolize" ast;
 
     -- If option --debug-profile, insert instrumented profiling expressions
     -- in AST
@@ -64,6 +63,9 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
       else ast
     in
     endPhaseStats log "instrument-profiling" ast;
+
+    let ast = symbolize ast in
+    endPhaseStats log "symbolize" ast;
 
     let ast = typeCheck ast in
     (if options.debugTypeCheck then
@@ -86,6 +88,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
       printLn (expr2str ast) else ());
 
     let res =
+      if options.toJVM then compileMCoreToJVM ast else
       if options.toJavaScript then compileMCoreToJS
         { compileJSOptionsEmpty with
           targetPlatform = parseJSTarget options.jsTarget

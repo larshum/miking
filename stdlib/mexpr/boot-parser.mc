@@ -140,7 +140,7 @@ lang BootParser = MExprAst + ConstTransformer
   | 102 /-TmLam-/ ->
     TmLam {ident = gname t 0,
            tyAnnot = gtype t 0,
-           tyIdent = TyUnknown { info = ginfo t 0 },
+           tyParam = TyUnknown { info = ginfo t 0 },
            ty = TyUnknown { info = ginfo t 0 },
            info = ginfo t 0,
            body = gterm t 0}
@@ -270,8 +270,7 @@ lang BootParser = MExprAst + ConstTransformer
            ident = gname t 0}
   | 210 /-TyVar-/ ->
     TyVar {info = ginfo t 0,
-           ident = gname t 0,
-           level = 0}
+           ident = gname t 0}
   | 211 /-TyApp-/ ->
     TyApp {info = ginfo t 0,
            lhs = gtype t 0,

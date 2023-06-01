@@ -13,6 +13,9 @@ include "map.mc"
 let tyint_ = use IntTypeAst in
   TyInt {info = NoInfo ()}
 
+let ityfloat_ = use FloatTypeAst in
+  lam i. TyFloat {info = i}
+
 let tyfloat_ = use FloatTypeAst in
   TyFloat {info = NoInfo ()}
 
@@ -55,13 +58,15 @@ let tyarrows_ = use FunTypeAst in
   lam tys.
   foldr1 (lam e. lam acc. TyArrow {from = e, to = acc, info = NoInfo ()}) tys
 
-let tyrecord_ : [(String, Type)] -> Type = use RecordTypeAst in
-  lam fields.
+let tyRecord : Info -> [(String, Type)] -> Type = use RecordTypeAst in
+  lam info. lam fields.
   let fieldMapFunc = lam b : (String, Type). (stringToSid b.0, b.1) in
   TyRecord {
     fields = mapFromSeq cmpSID (map fieldMapFunc fields),
-    info = NoInfo ()
+    info = info
   }
+
+let tyrecord_ = tyRecord (NoInfo ())
 
 let tytuple_ = lam tys.
   tyrecord_ (mapi (lam i. lam ty. (int2string i, ty)) tys)
@@ -79,6 +84,10 @@ let tyapp_ = use AppTypeAst in
   lam lhs. lam rhs.
   TyApp {lhs = lhs, rhs = rhs, info = NoInfo ()}
 
+let tyapps_ = use AppTypeAst in
+  lam lhs. lam args.
+  foldl tyapp_ lhs args
+
 let tyalias_ = use AliasTypeAst in
   lam display. lam content.
   TyAlias {display = display, content = content}
@@ -92,7 +101,7 @@ let tycon_ = lam s.
 
 let ntyvar_ = use VarTypeAst in
   lam n.
-  TyVar {ident = n, level = 0, info = NoInfo ()}
+  TyVar {ident = n, info = NoInfo ()}
 
 let tyvar_ =
   lam s.
@@ -487,7 +496,7 @@ let tmLam = use MExprAst in
   TmLam {
     ident = ident,
     tyAnnot = tyAnnot,
-    tyIdent = tyAnnot,
+    tyParam = tyAnnot,
     ty = ty,
     body = body,
     info = info
@@ -573,6 +582,27 @@ let record_add = use MExprAst in
 let record_add_bindings : [(String, Expr)] -> Expr -> Expr =
   lam bindings. lam record.
   foldl (lam recacc. lam b : (String, Expr). record_add b.0 b.1 recacc) record bindings
+
+-- Get an optional list of tuple expressions for a record. If the record does
+-- not represent a tuple, None () is returned.
+let record2tuple
+  : all a. Map SID a
+    -> Option [a]
+  = lam bindings.
+    let keys = map sidToString (mapKeys bindings) in
+    match forAll stringIsInt keys with false then None () else
+      let intKeys = map string2int keys in
+      let sortedKeys = sort subi intKeys in
+      -- Check if keys are a sequence 0..(n-1)
+      match sortedKeys with [] then None ()
+      else match sortedKeys with [h] ++ _ in
+           if and (eqi 0 h)
+                (eqi (subi (length intKeys) 1) (last sortedKeys)) then
+             Some (map (lam key. mapLookupOrElse
+                                 (lam. error "Key not found")
+                                 (stringToSid (int2string key)) bindings)
+                     sortedKeys)
+           else None ()
 
 let never_ = use MExprAst in
   TmNever {ty = tyunknown_, info = NoInfo ()}
@@ -1191,78 +1221,6 @@ let bootParserGetPat_ = use MExprAst in
 let bootParserGetInfo_ = use MExprAst in
   lam pt. lam n.
   appf2_ (uconst_ (CBootParserGetInfo ())) pt n
-
-let mapEmpty_ = use MExprAst in
-  lam cmp.
-  appf1_ (uconst_ (CMapEmpty ())) cmp
-
-let mapInsert_ = use MExprAst in
-  lam k. lam v. lam m.
-  appf3_ (uconst_ (CMapInsert ())) k v m
-
-let mapRemove_ = use MExprAst in
-  lam k. lam m.
-  appf2_ (uconst_ (CMapRemove ())) k m
-
-let mapFindExn_ = use MExprAst in
-  lam k. lam m.
-  appf2_ (uconst_ (CMapFindExn ())) k m
-
-let mapFindOrElse_ = use MExprAst in
-  lam f. lam k. lam m.
-  appf3_ (uconst_ (CMapFindOrElse ())) f k m
-
-let mapFindApplyOrElse_ = use MExprAst in
-  lam f. lam felse. lam k. lam m.
-  appf4_ (uconst_ (CMapFindApplyOrElse ())) f felse k m
-
-let mapBindings_ = use MExprAst in
-  lam m.
-  appf1_ (uconst_ (CMapBindings ())) m
-
-let mapChooseExn_ = use MExprAst in
-  lam m.
-  appf1_ (uconst_ (CMapChooseExn ())) m
-
-let mapChooseOrElse_ = use MExprAst in
-  lam f. lam m.
-  appf2_ (uconst_ (CMapFindOrElse ())) f m
-
-let mapSize_ = use MExprAst in
-  lam m.
-  appf1_ (uconst_ (CMapSize ())) m
-
-let mapMem_ = use MExprAst in
-  lam k. lam m.
-  appf2_ (uconst_ (CMapMem ())) k m
-
-let mapAny_ = use MExprAst in
-  lam p. lam m.
-  appf2_ (uconst_ (CMapAny ())) p m
-
-let mapMap_ = use MExprAst in
-  lam f. lam m.
-  appf2_ (uconst_ (CMapMap ())) f m
-
-let mapMapWithKey_ = use MExprAst in
-  lam f. lam m.
-  appf2_ (uconst_ (CMapMapWithKey ())) f m
-
-let mapFoldWithKey_ = use MExprAst in
-  lam f. lam z. lam m.
-  appf3_ (uconst_ (CMapFoldWithKey ())) f z m
-
-let mapEq_ = use MExprAst in
-  lam veq. lam m1. lam m2.
-  appf3_ (uconst_ (CMapEq ())) veq m1 m2
-
-let mapCmp_ = use MExprAst in
-  lam vcmp. lam m1. lam m2.
-  appf3_ (uconst_ (CMapCmp ())) vcmp m1 m2
-
-let mapGetCmpFun_ = use MExprAst in
-  lam m.
-  appf1_ (uconst_ (CMapGetCmpFun ())) m
 
 -- Sequencing (;)
 let semi_ = lam expr1. lam expr2. bind_ (ulet_ "" expr1) expr2

@@ -5,7 +5,7 @@
 include "string.mc"
 include "seq.mc"
 include "mexpr/info.mc"
-
+include "grammar.mc"
 
 let tabSpace = 2
 
@@ -19,9 +19,8 @@ type Stream = {pos : Pos, str : String}
 type NextTokenResult = {token : Token, lit : String, info : Info, stream : Stream}
 
 -- Base language for parsing tokens preceeded by WSAC
-lang TokenParser = WSACParser
+lang TokenParser = WSACParser + TokenReprBase
   syn Token =
-  syn TokenRepr =
   sem nextToken /- : Stream -> NextTokenResult -/ =
   | stream ->
     let stream: Stream = stream in
@@ -32,9 +31,6 @@ lang TokenParser = WSACParser
   sem tokKindEq (tokRepr : TokenRepr) /- : Token -> Bool -/ =
   sem tokInfo /- : Token -> Info -/ =
   sem tokToStr /- : Token -> String -/ =
-  sem tokReprCompare /- : (TokenRepr, TokenRepr) -> Int -/ =
-  | (l, r) -> subi (constructorTag l) (constructorTag r)
-  sem tokReprToStr /- : TokenRepr -> String -/ =
   sem tokToRepr /- : Token -> TokenRepr -/ =
 end
 
@@ -80,11 +76,9 @@ end
 lang MExprWSACParser = WhitespaceParser + LineCommentParser + MultilineCommentParser
 end
 
-lang EOFTokenParser = TokenParser
+lang EOFTokenParser = TokenParser + TokenReprEOF
   syn Token =
   | EOFTok {info : Info}
-  syn TokenRepr =
-  | EOFRepr ()
 
   sem parseToken (pos : Pos) =
   | [] ->
@@ -99,9 +93,6 @@ lang EOFTokenParser = TokenParser
 
   sem tokToStr =
   | EOFTok _ -> "<EOF>"
-
-  sem tokReprToStr =
-  | EOFRepr _ -> "<EOF>"
 
   sem tokToRepr =
   | EOFTok _ -> EOFRepr ()
@@ -673,7 +664,7 @@ lang HashStringTokenParser = TokenParser
   sem tokToStr =
   | HashStringTok tok -> join ["<Hash:", tok.hash, ">", tok.val]
 
-  sem tokReprCompare =
+  sem tokReprCmp2 =
   | (HashStringRepr l, HashStringRepr r) -> cmpString l.hash r.hash
 
   sem tokToRepr =

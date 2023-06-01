@@ -263,7 +263,7 @@ lang LambdaLiftSolveEquations = LambdaLift + MExprCallGraph
     else match mapLookup t.ident state.sols with Some fv then
       mapUnion free fv
     else errorSingle [t.info] "Unbound variable encountered in lambda lifting"
-  | TmLam t -> freeVariablesExpr state (mapInsert t.ident t.tyIdent bound) free t.body
+  | TmLam t -> freeVariablesExpr state (mapInsert t.ident t.tyParam bound) free t.body
   | TmLet t ->
     -- NOTE(larshum, 2023-01-22): If this binding is a function, then we
     -- already know its solution as we compute solutions in a depth-first
@@ -483,8 +483,8 @@ lang LambdaLiftCaptureVariables = LambdaLift + LambdaLiftSolveEquations
                 (lam freeVar. lam acc.
                   match freeVar with (fvId, fvTy) in
                   let ty = TyArrow {from = fvTy, to = tyTm acc, info = info} in
-                  TmLam {ident = fvId, tyAnnot = TyUnknown {info = info},
-                         tyIdent = fvTy, body = acc, info = info, ty = ty})
+                  TmLam {ident = fvId, tyAnnot = fvTy, tyParam = ityunknown_ info,
+                         body = acc, info = info, ty = ty})
                 body (mapBindings solution)
             in
             recursive let updateTyBody = lam tyBody.
@@ -509,7 +509,7 @@ lang LambdaLiftCaptureVariables = LambdaLift + LambdaLiftSolveEquations
     match mapLookup t.ident state.subs with Some subFn then subFn state.bound t.ty t.info
     else TmVar t
   | TmLam t ->
-    let state = {state with bound = mapInsert t.ident t.tyIdent state.bound} in
+    let state = {state with bound = mapInsert t.ident t.tyParam state.bound} in
     TmLam {t with body = captureFreeVariablesH state t.body}
   | TmLet t ->
     let t = {t with body = captureFreeVariablesH state t.body} in
@@ -1154,7 +1154,8 @@ let innerTypeCon = preprocess (ureclets_ [
     ulet_ "g" (ulam_ "x" (ulam_ "y" (
       conapp_ "Branch" (utuple_ [conapp_ "Leaf" (var_ "x"), conapp_ "Leaf" (var_ "y")])
     ))),
-    appf2_ (var_ "g") (var_ "x") (int_ 0)
+    match_ (appf2_ (var_ "g") (var_ "x") (int_ 0)) (pcon_ "Branch" pvarw_)
+      (int_ 1) (int_ 0)
   ]))
 ]) in
 let expected = preprocess (bindall_ [
@@ -1166,7 +1167,9 @@ let expected = preprocess (bindall_ [
       (conapp_
         "Branch"
         (utuple_ [conapp_ "Leaf" (var_ "x"), conapp_ "Leaf" (var_ "y")])))),
-    ("f", ulam_ "x" (appf2_ (var_ "g") (var_ "x") (int_ 0)))
+    ("f", ulam_ "x"
+      (match_ (appf2_ (var_ "g") (var_ "x") (int_ 0)) (pcon_ "Branch" pvarw_)
+        (int_ 1) (int_ 0)))
   ]
 ]) in
 -- NOTE(larshum, 2023-01-27): We cannot compare TmType using eqExpr, so we
@@ -1420,13 +1423,16 @@ utest liftLambdas liftMatchEls with expected using eqExpr in
 let conAppLift = preprocess (bindall_ [
   type_ "Tree" [] (tyvariant_ []),
   condef_ "Leaf" (tyarrow_ tyint_ (tycon_ "Tree")),
-  conapp_ "Leaf" fapp
+  ulet_ "x" (conapp_ "Leaf" fapp),
+  unit_
 ]) in
 let expected = preprocess (bindall_ [
   type_ "Tree" [] (tyvariant_ []),
   condef_ "Leaf" (tyarrow_ tyint_ (tycon_ "Tree")),
   fdef,
-  conapp_ "Leaf" (app_ (var_ "f") (int_ 1))]) in
+  ulet_ "x" (conapp_ "Leaf" (app_ (var_ "f") (int_ 1))),
+  unit_
+]) in
 
 -- NOTE(larshum, 2022-09-15): Compare using eqString as equality of TmType has
 -- not been implemented.
