@@ -23,7 +23,7 @@ include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 
-lang Monomorphize = MExprAst + MExprCmp + MExprPrettyPrint
+lang Monomorphize = MExprAst + MExprCmp
   -- An instantiation maps type variable identifiers to concrete types. It
   -- represents a monomorphic use of a polymorphic construct.
   type Instantiation = Map Name Type
@@ -66,35 +66,6 @@ lang Monomorphize = MExprAst + MExprCmp + MExprPrettyPrint
   | _ ->
     { funEnv = mapEmpty nameCmp, conEnv = mapEmpty nameCmp
     , typeEnv = mapEmpty nameCmp, constEnv = mapEmpty cmpConst }
-
-  -- NOTE(larshum, 2023-08-07): Provides a readable overview of the contents of
-  -- the monomorphization environment, for debugging purposes.
-  sem monoEnvToString : MonoEnv -> String
-  sem monoEnvToString =
-  | env ->
-    let innerEnvToString = lam innerEnv. lam printId.
-      mapFoldWithKey
-        (lam acc. lam id. lam entry.
-          let acc = snoc acc (printId id) in
-          let acc = snoc acc (type2str entry.polyType) in
-          mapFoldWithKey
-            (lam acc. lam inst. lam.
-              mapFoldWithKey
-                (lam acc. lam varId. lam ty.
-                  snoc acc (join ["  ", nameGetStr varId, " -> ", type2str ty]))
-                acc inst)
-            acc entry.map)
-        [] innerEnv
-    in
-    strJoin "\n" [
-      "Functions",
-      strJoin "\n" (innerEnvToString env.funEnv nameGetStr),
-      "Constructors",
-      strJoin "\n" (innerEnvToString env.conEnv nameGetStr),
-      "Types",
-      strJoin "\n" (innerEnvToString env.typeEnv nameGetStr),
-      "Constants",
-      strJoin "\n" (innerEnvToString env.constEnv (getConstStringCode 0)) ]
 
   sem monoError : all a. [Info] -> String -> a
   sem monoError infos =
