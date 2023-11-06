@@ -237,6 +237,7 @@ lang OCamlTypeAst =
   | OTyBigarrayFloat64Elt {info : Info}
   | OTyBigarrayIntElt {info : Info}
   | OTyBigarrayClayout {info : Info}
+  | OTyMTensor {ty : Type, info : Info}
   | OTyLabel {info : Info, label : String, ty : Type}
   | OTyVar {info : Info, ident : Name}
   | OTyVarExt {info : Info, ident : String, args : [Type]}
@@ -259,6 +260,7 @@ lang OCamlTypeAst =
   | OTyBigarrayFloat64Elt r -> r.info
   | OTyBigarrayIntElt r -> r.info
   | OTyBigarrayClayout r -> r.info
+  | OTyMTensor r -> r.info
   | OTyLabel r -> r.info
   | OTyVarExt r -> r.info
   | OTyParam r -> r.info
@@ -293,6 +295,9 @@ lang OCamlTypeAst =
     match f acc layout with (acc, layout) in
     let t = {{{t with ty = ty} with elty = elty} with layout = layout} in
     (acc, OTyBigarrayArray t)
+  | OTyMTensor t ->
+    match f acc t.ty with (acc, ty) in
+    (acc, OTyMTensor {t with ty = ty})
   | OTyLabel t ->
     match f acc t.ty with (acc, ty) in
     (acc, OTyLabel {t with ty = ty})
@@ -381,6 +386,10 @@ let otybaarrayclayoutfloat_ = use OCamlAst in
   lam rank.
     otybaarray_
       rank tyfloat_ (OTyBigarrayFloat64Elt {info = NoInfo ()}) oclayout_
+
+let otymtensor_ = use OCamlAst in
+  lam ty.
+  OTyMTensor {ty = ty, info = NoInfo ()}
 
 let otytuple_ = use OCamlAst in
   lam tys. OTyTuple {info = NoInfo (), tys = tys}

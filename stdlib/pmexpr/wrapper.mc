@@ -20,9 +20,8 @@ let _genCWrapperNames = lam.
     "futhark_context_config_free", "futhark_context_free",
     "futhark_context_sync", "futhark_context_get_error", "NULL", "cudaMalloc",
     "cudaFree", "cudaMemcpy", "cudaDeviceSynchronize",
-    "cudaMemcpyHostToDevice", "cudaMemcpyDeviceToHost", "Caml_ba_array_val",
-    "Caml_ba_data_val", "caml_ba_alloc", "CAML_BA_CAML_INT", "CAML_BA_FLOAT64",
-    "CAML_BA_C_LAYOUT", "qsort"]
+    "cudaMemcpyHostToDevice", "cudaMemcpyDeviceToHost", "Data_custom_val",
+    "miking_tensor_t"]
   in
   mapFromSeq
     cmpString

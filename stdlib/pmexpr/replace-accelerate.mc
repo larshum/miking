@@ -18,11 +18,7 @@ lang PMExprReplaceAccelerate =
 
   sem _tensorToOCamlType =
   | TyTensor {ty = ty & (TyInt _ | TyFloat _), info = info} ->
-    let layout = OTyBigarrayClayout {info = info} in
-    let elemType =
-      match ty with TyInt _ then OTyBigarrayIntElt {info = info}
-      else OTyBigarrayFloat64Elt {info = info} in
-    OTyBigarrayGenarray {info = info, ty = ty, elty = elemType, layout = layout}
+    OTyMTensor {ty = ty, info = info}
   | TyTensor t ->
     errorSingle [t.info] "Cannot convert tensor of unsupported type"
 

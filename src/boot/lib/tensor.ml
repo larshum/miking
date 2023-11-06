@@ -1,74 +1,67 @@
 open Ustring.Op
 
 module type TENSOR = sig
-  type ('a, 'b) t
+  type 'a t
 
-  val get_exn : ('a, 'b) t -> int array -> 'a
+  val get_exn : 'a t -> int array -> 'a
 
-  val set_exn : ('a, 'b) t -> int array -> 'a -> unit
+  val set_exn : 'a t -> int array -> 'a -> unit
 
-  val linear_get_exn : ('a, 'b) t -> int -> 'a
+  val linear_get_exn : 'a t -> int -> 'a
 
-  val linear_set_exn : ('a, 'b) t -> int -> 'a -> unit
+  val linear_set_exn : 'a t -> int -> 'a -> unit
 
-  val shape : ('a, 'b) t -> int array
+  val shape : 'a t -> int array
 
-  val rank : ('a, 'b) t -> int
+  val rank : 'a t -> int
 
-  val size : ('a, 'b) t -> int
+  val size : 'a t -> int
 
-  val reshape_exn : ('a, 'b) t -> int array -> ('a, 'b) t
+  val reshape_exn : 'a t -> int array -> 'a t
 
-  val slice_exn : ('a, 'b) t -> int array -> ('a, 'b) t
+  val slice_exn : 'a t -> int array -> 'a t
 
-  val sub_exn : ('a, 'b) t -> int -> int -> ('a, 'b) t
+  val sub_exn : 'a t -> int -> int -> 'a t
 
-  val copy : ('a, 'b) t -> ('a, 'b) t
+  val copy : 'a t -> 'a t
 
-  val transpose_exn : ('a, 'b) t -> int -> int -> ('a, 'b) t
+  val transpose_exn : 'a t -> int -> int -> 'a t
 end
 
 module type GENERIC = sig
   include TENSOR
 
-  val create : int array -> (int array -> 'a) -> ('a, 'b) t
+  val create : int array -> (int array -> 'a) -> 'a t
 end
 
 module type BARRAY = sig
-  open Bigarray
-
   include TENSOR
 
-  val uninit_int : int array -> (int, int_elt) t
+  val uninit_int : int array -> int t
 
-  val uninit_float : int array -> (float, float64_elt) t
+  val uninit_float : int array -> float t
 
-  val create_int : int array -> (int array -> int) -> (int, int_elt) t
+  val create_int : int array -> (int array -> int) -> int t
 
-  val create_float :
-    int array -> (int array -> float) -> (float, float64_elt) t
-
-  val to_genarray_clayout : ('a, 'b) t -> ('a, 'b, c_layout) Genarray.t
-
-  val of_genarray_clayout : ('a, 'b, c_layout) Genarray.t -> ('a, 'b) t
+  val create_float : int array -> (int array -> float) -> float t
 end
 
 module type UOP = sig
-  type ('a, 'b) t
+  type 'a t
 
-  val iter_slice : (int -> ('a, 'b) t -> unit) -> ('a, 'b) t -> unit
+  val iter_slice : (int -> 'a t -> unit) -> 'a t -> unit
 
-  val to_data_array : ('a, 'b) t -> 'a array
+  val to_data_array : 'a t -> 'a array
 
-  val to_ustring : ('a -> ustring) -> ('a, 'b) t -> ustring
+  val to_ustring : ('a -> ustring) -> 'a t -> ustring
 end
 
 module type BOP = sig
-  type ('a, 'b) t1
+  type 'a t1
 
-  type ('c, 'd) t2
+  type 'b t2
 
-  val equal : ('a -> 'c -> bool) -> ('a, 'b) t1 -> ('c, 'd) t2 -> bool
+  val equal : ('a -> 'b -> bool) -> 'a t1 -> 'b t2 -> bool
 end
 
 let prod = Array.fold_left ( * ) 1
@@ -87,17 +80,6 @@ let cartesian_to_linear_idx shape idx =
   done ;
   !tmp_ofs
 
-let linear_to_cartesian_idx shape linear_idx =
-  let rank = Array.length shape in
-  let idx = Array.make rank 0 in
-  let tmp_k = ref linear_idx in
-  for i = rank - 1 downto 0 do
-    let d = shape.(i) in
-    idx.(i) <- !tmp_k mod d ;
-    tmp_k := !tmp_k / d
-  done ;
-  idx
-
 let transpose create shape get_exn t dim0 dim1 =
   let shape' = shape t in
   let rank = Array.length shape' in
@@ -114,7 +96,7 @@ let transpose create shape get_exn t dim0 dim1 =
   else raise (Invalid_argument "Tensor.transpose")
 
 module Generic : GENERIC = struct
-  type ('a, _) t =
+  type 'a t =
     {data: 'a array; shape: int array; rank: int; offset: int; size: int}
 
   let rank t = t.rank
@@ -214,64 +196,153 @@ module Generic : GENERIC = struct
 end
 
 module Barray : BARRAY = struct
-  open Bigarray
+  type opaque
 
-  type ('a, 'b) t = ('a, 'b, c_layout) Genarray.t
+  type elem_type = Int_type | Float_type
 
-  let get_exn = Genarray.get
+  type 'a t =
+    { data: opaque
+    ; shape: int array
+    ; rank: int
+    ; offset: int
+    ; size: int
+    ; element_type: elem_type }
 
-  let set_exn = Genarray.set
+  external ext_tensor_init : int -> int -> opaque = "tensor_init"
 
-  let rank = Genarray.num_dims
+  external ext_tensor_get : opaque -> int -> elem_type -> 'a = "tensor_get"
 
-  let shape = Genarray.dims
+  external ext_tensor_set : opaque -> int -> 'a -> elem_type -> unit
+    = "tensor_set"
 
-  let linear_get_exn t linear_idx =
-    get_exn t (linear_to_cartesian_idx (shape t) linear_idx)
+  external ext_tensor_copy : opaque -> int -> opaque = "tensor_copy"
 
-  let linear_set_exn t linear_idx v =
-    set_exn t (linear_to_cartesian_idx (shape t) linear_idx) v
+  let is_valid_index shape idx =
+    let valid = ref true in
+    Array.iteri (fun i n -> valid := !valid && n >= 0 && n < shape.(i)) idx ;
+    !valid
 
-  let size t = prod (shape t)
+  let get_exn t idx =
+    if Array.length idx = t.rank && is_valid_index t.shape idx then
+      let linear_idx = cartesian_to_linear_idx t.shape idx + t.offset in
+      ext_tensor_get t.data linear_idx t.element_type
+    else raise (Invalid_argument "Tensor.Barray.get_exn")
 
-  let blit_exn = Genarray.blit
+  let set_exn t idx v =
+    if Array.length idx = t.rank && is_valid_index t.shape idx then
+      let linear_idx = cartesian_to_linear_idx t.shape idx + t.offset in
+      ext_tensor_set t.data linear_idx v t.element_type
+    else raise (Invalid_argument "Tensor.Barray.set_exn")
 
-  let copy t =
-    let t' = Genarray.create (Genarray.kind t) c_layout (shape t) in
-    blit_exn t t' ; t'
+  let linear_get_exn t lidx =
+    if lidx >= 0 && lidx < t.size then
+      ext_tensor_get t.data lidx t.element_type
+    else raise (Invalid_argument "Tensor.Barray.linear_get_exn")
 
-  let reshape_exn = reshape
+  let linear_set_exn t lidx v =
+    if lidx >= 0 && lidx < t.size then
+      ext_tensor_set t.data lidx v t.element_type
+    else raise (Invalid_argument "Tensor.Barray.linear_set_exn")
 
-  let slice_exn = Genarray.slice_left
+  let rank t = t.rank
 
-  let sub_exn = Genarray.sub_left
+  let shape t = t.shape
 
-  let create (type a b) (kind : (a, b) Bigarray.kind) shape (f : int array -> a)
-      : (a, b) t =
-    if Array.length shape = 0 then (
-      let t = Genarray.create kind c_layout shape in
-      Genarray.set t shape (f shape) ;
+  let size t = t.size
+
+  let copy src = {src with data= ext_tensor_copy src.data src.size}
+
+  let reshape_exn t shape =
+    if t.size = prod shape then
+      let rank = Array.length shape in
+      {t with shape; rank}
+    else raise (Invalid_argument "Tensor.Barray.reshape_exn")
+
+  let slice_exn t slice =
+    if Array.length slice = 0 then t
+    else if is_valid_index t.shape slice then
+      let n = Array.length slice in
+      let offset = cartesian_to_linear_idx t.shape slice + t.offset in
+      let rank = t.rank - n in
+      let shape = if rank > 0 then Array.sub t.shape n rank else [||] in
+      let size = prod shape in
+      {t with offset; rank; shape; size}
+    else raise (Invalid_argument "Tensor.Barray.slice_exn")
+
+  let sub_exn t ofs len =
+    if t.rank > 0 && ofs >= 0 && ofs + len <= t.shape.(0) then (
+      let offset = cartesian_to_linear_idx t.shape [|ofs|] + t.offset in
+      let shape = Array.copy t.shape in
+      shape.(0) <- len ;
+      {t with offset; size= prod shape; shape} )
+    else raise (Invalid_argument "Tensor.Barray.sub_exn")
+
+  let uninit_int shape =
+    let sz = prod shape in
+    { data= ext_tensor_init sz 0
+    ; shape
+    ; rank= Array.length shape
+    ; offset= 0
+    ; size= sz
+    ; element_type= Int_type }
+
+  let uninit_float shape =
+    let sz = prod shape in
+    { data= ext_tensor_init sz 1
+    ; shape
+    ; rank= Array.length shape
+    ; offset= 0
+    ; size= sz
+    ; element_type= Float_type }
+
+  let fill t f =
+    if t.rank = 0 then (
+      ext_tensor_set t.data 0 (f [||]) t.element_type ;
       t )
-    else Genarray.init kind c_layout shape f
+    else
+      let cidx = Array.make t.rank 0 in
+      let rec increment cidx dim =
+        cidx.(dim) <- cidx.(dim) + 1 ;
+        if cidx.(dim) = t.shape.(dim) then (
+          cidx.(dim) <- 0 ;
+          increment cidx (dim - 1) )
+      in
+      cidx.(t.rank - 1) <- -1 ;
+      for i = 0 to t.size - 1 do
+        increment cidx (t.rank - 1) ;
+        ext_tensor_set t.data i (f cidx) t.element_type
+      done ;
+      t
 
-  let uninit_int = Genarray.create Bigarray.int c_layout
+  let create_int shape f = fill (uninit_int shape) f
 
-  let uninit_float = Genarray.create Bigarray.float64 c_layout
+  let create_float shape f = fill (uninit_float shape) f
 
-  let create_int = create Bigarray.int
-
-  let create_float = create Bigarray.float64
+  let create shape f = function
+    | Int_type ->
+        create_int shape f
+    | Float_type ->
+        create_float shape f
 
   let transpose_exn t dim0 dim1 =
-    transpose (create (Genarray.kind t)) shape get_exn t dim0 dim1
-
-  let to_genarray_clayout t = t
-
-  let of_genarray_clayout t = t
+    let shape = Array.copy t.shape in
+    if dim0 >= 0 && dim0 < t.rank && dim1 >= 0 && dim1 < t.rank then (
+      let tmp = shape.(dim0) in
+      shape.(dim0) <- shape.(dim1) ;
+      shape.(dim1) <- tmp ;
+      let f idx =
+        let idx' = Array.copy idx in
+        let tmp = idx'.(dim0) in
+        idx'.(dim0) <- idx'.(dim1) ;
+        idx'.(dim1) <- tmp ;
+        get_exn t idx'
+      in
+      create shape f t.element_type )
+    else raise (Invalid_argument "Tensor.Barray.transpose")
 end
 
-module Uop (T : TENSOR) : UOP with type ('a, 'b) t = ('a, 'b) T.t = struct
-  type ('a, 'b) t = ('a, 'b) T.t
+module Uop (T : TENSOR) : UOP with type 'a t = 'a T.t = struct
+  type 'a t = 'a T.t
 
   let iter_slice f t =
     if T.rank t = 0 then f 0 t
@@ -312,12 +383,10 @@ module Uop (T : TENSOR) : UOP with type ('a, 'b) t = ('a, 'b) T.t = struct
 end
 
 module Bop (T1 : TENSOR) (T2 : TENSOR) :
-  BOP
-    with type ('a, 'b) t1 = ('a, 'b) T1.t
-     and type ('c, 'd) t2 = ('c, 'd) T2.t = struct
-  type ('a, 'b) t1 = ('a, 'b) T1.t
+  BOP with type 'a t1 = 'a T1.t and type 'b t2 = 'b T2.t = struct
+  type 'a t1 = 'a T1.t
 
-  type ('c, 'd) t2 = ('c, 'd) T2.t
+  type 'b t2 = 'b T2.t
 
   let equal eq t1 t2 =
     if T1.shape t1 = T2.shape t2 then (

@@ -26,4 +26,9 @@
    pypprint.ml
    from
    (pyml -> pypprint.py.ml)
-   (-> pypprint.py-skel.ml))))
+   (-> pypprint.py-skel.ml)))
+ (c_library_flags -lcudart)
+ (foreign_stubs
+  (language c)
+  (names mtensor-stubs mtensor)
+  (flags -DMIKING_CUDA)))

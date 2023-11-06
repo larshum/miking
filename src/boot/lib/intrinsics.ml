@@ -286,43 +286,40 @@ module Mseq = struct
 end
 
 module T = struct
-  open Bigarray
-
   type 'a t =
-    | TBootInt of (int, int_elt) Tensor.Barray.t
-    | TBootFloat of (float, float64_elt) Tensor.Barray.t
-    | TBootGen of ('a, 'a) Tensor.Generic.t
+    | TBootInt of int Tensor.Barray.t
+    | TBootFloat of float Tensor.Barray.t
+    | TBootGen of 'a Tensor.Generic.t
 
-  type ('a, 'b) u =
-    | TInt : (int, int_elt) Tensor.Barray.t -> (int, int_elt) u
-    | TFloat : (float, float64_elt) Tensor.Barray.t -> (float, float64_elt) u
-    | TGen : ('a, 'b) Tensor.Generic.t -> ('a, 'b) u
+  type 'a u =
+    | TInt : int Tensor.Barray.t -> int u
+    | TFloat : float Tensor.Barray.t -> float u
+    | TGen : 'a Tensor.Generic.t -> 'a u
 
   module type OP_MSEQ = sig
-    type ('a, 'b) t
+    type 'a t
 
-    val get_exn : ('a, 'b) t -> int Mseq.t -> 'a
+    val get_exn : 'a t -> int Mseq.t -> 'a
 
-    val set_exn : ('a, 'b) t -> int Mseq.t -> 'a -> unit
+    val set_exn : 'a t -> int Mseq.t -> 'a -> unit
 
-    val linear_get_exn : ('a, 'b) t -> int -> 'a
+    val linear_get_exn : 'a t -> int -> 'a
 
-    val linear_set_exn : ('a, 'b) t -> int -> 'a -> unit
+    val linear_set_exn : 'a t -> int -> 'a -> unit
 
-    val shape : ('a, 'b) t -> int Mseq.t
+    val shape : 'a t -> int Mseq.t
 
-    val reshape_exn : ('a, 'b) t -> int Mseq.t -> ('a, 'b) t
+    val reshape_exn : 'a t -> int Mseq.t -> 'a t
 
-    val slice_exn : ('a, 'b) t -> int Mseq.t -> ('a, 'b) t
+    val slice_exn : 'a t -> int Mseq.t -> 'a t
   end
 
   let to_arr = Mseq.Helpers.to_array
 
   let of_arr = Mseq.Helpers.of_array
 
-  module Op_mseq (T : Tensor.TENSOR) :
-    OP_MSEQ with type ('a, 'b) t = ('a, 'b) T.t = struct
-    type ('a, 'b) t = ('a, 'b) T.t
+  module Op_mseq (T : Tensor.TENSOR) : OP_MSEQ with type 'a t = 'a T.t = struct
+    type 'a t = 'a T.t
 
     let get_exn t idx = T.get_exn t (to_arr idx)
 
@@ -368,7 +365,7 @@ module T = struct
 
   let create_generic_packed shape f = TGen (create_generic shape f)
 
-  let get_exn (type a b) (t : (a, b) u) idx : a =
+  let get_exn (type a) (t : a u) idx : a =
     match t with
     | TInt t' ->
         Op_mseq_barray.get_exn t' idx
@@ -377,7 +374,7 @@ module T = struct
     | TGen t' ->
         Op_mseq_generic.get_exn t' idx
 
-  let set_exn (type a b) (t : (a, b) u) idx (v : a) : unit =
+  let set_exn (type a) (t : a u) idx (v : a) : unit =
     match t with
     | TInt t' ->
         Op_mseq_barray.set_exn t' idx v
@@ -386,7 +383,7 @@ module T = struct
     | TGen t' ->
         Op_mseq_generic.set_exn t' idx v
 
-  let linear_get_exn (type a b) (t : (a, b) u) idx : a =
+  let linear_get_exn (type a) (t : a u) idx : a =
     match t with
     | TInt t' ->
         Op_mseq_barray.linear_get_exn t' idx
@@ -395,7 +392,7 @@ module T = struct
     | TGen t' ->
         Op_mseq_generic.linear_get_exn t' idx
 
-  let linear_set_exn (type a b) (t : (a, b) u) idx (v : a) : unit =
+  let linear_set_exn (type a) (t : a u) idx (v : a) : unit =
     match t with
     | TInt t' ->
         Op_mseq_barray.linear_set_exn t' idx v
@@ -404,7 +401,7 @@ module T = struct
     | TGen t' ->
         Op_mseq_generic.linear_set_exn t' idx v
 
-  let shape (type a b) (t : (a, b) u) : int Mseq.t =
+  let shape (type a) (t : a u) : int Mseq.t =
     match t with
     | TInt t' ->
         Op_mseq_barray.shape t'
@@ -413,7 +410,7 @@ module T = struct
     | TGen t' ->
         Op_mseq_generic.shape t'
 
-  let slice_exn (type a b) (t : (a, b) u) idx : (a, b) u =
+  let slice_exn (type a) (t : a u) idx : a u =
     match t with
     | TInt t' ->
         TInt (Op_mseq_barray.slice_exn t' idx)
@@ -422,7 +419,7 @@ module T = struct
     | TGen t' ->
         TGen (Op_mseq_generic.slice_exn t' idx)
 
-  let reshape_exn (type a b) (t : (a, b) u) idx : (a, b) u =
+  let reshape_exn (type a) (t : a u) idx : a u =
     match t with
     | TInt t' ->
         TInt (Op_mseq_barray.reshape_exn t' idx)
@@ -431,7 +428,7 @@ module T = struct
     | TGen t' ->
         TGen (Op_mseq_generic.reshape_exn t' idx)
 
-  let sub_exn (type a b) (t : (a, b) u) start len : (a, b) u =
+  let sub_exn (type a) (t : a u) start len : a u =
     match t with
     | TInt t' ->
         TInt (Tensor.Barray.sub_exn t' start len)
@@ -440,7 +437,7 @@ module T = struct
     | TGen t' ->
         TGen (Tensor.Generic.sub_exn t' start len)
 
-  let copy (type a b) (t : (a, b) u) : (a, b) u =
+  let copy (type a) (t : a u) : a u =
     match t with
     | TInt t' ->
         TInt (Tensor.Barray.copy t')
@@ -449,7 +446,7 @@ module T = struct
     | TGen t' ->
         TGen (Tensor.Generic.copy t')
 
-  let transpose_exn (type a b) (t : (a, b) u) dim0 dim1 : (a, b) u =
+  let transpose_exn (type a) (t : a u) dim0 dim1 : a u =
     match t with
     | TInt t' ->
         TInt (Tensor.Barray.transpose_exn t' dim0 dim1)
@@ -458,8 +455,7 @@ module T = struct
     | TGen t' ->
         TGen (Tensor.Generic.transpose_exn t' dim0 dim1)
 
-  let iter_slice (type a b) (f : int -> (a, b) u -> unit) (t : (a, b) u) : unit
-      =
+  let iter_slice (type a) (f : int -> a u -> unit) (t : a u) : unit =
     match t with
     | TInt t' ->
         Tensor.Uop_barray.iter_slice (fun i t -> f i (TInt t)) t'
@@ -468,7 +464,7 @@ module T = struct
     | TGen t' ->
         Tensor.Uop_generic.iter_slice (fun i t -> f i (TGen t)) t'
 
-  let rank (type a b) (t : (a, b) u) : int =
+  let rank (type a) (t : a u) : int =
     match t with
     | TInt t' ->
         Tensor.Barray.rank t'
@@ -477,8 +473,7 @@ module T = struct
     | TGen t' ->
         Tensor.Generic.rank t'
 
-  let equal (type a b c d) (eq : a -> b -> bool) (t1 : (a, c) u) (t2 : (b, d) u)
-      : bool =
+  let equal (type a b) (eq : a -> b -> bool) (t1 : a u) (t2 : b u) : bool =
     match (t1, t2) with
     | TInt t1', TInt t2' ->
         Tensor.Bop_barray_barray.equal eq t1' t2'
@@ -503,8 +498,7 @@ module T = struct
       | TGen t1' ->
           Tensor.Bop_generic_generic.equal eq t1' t2' )
 
-  let to_string (type a b) (el2str : a -> int Mseq.t) (t : (a, b) u) :
-      int Mseq.t =
+  let to_string (type a) (el2str : a -> int Mseq.t) (t : a u) : int Mseq.t =
     let el2str x = Mseq.Helpers.to_ustring (el2str x) in
     ( match t with
     | TInt t' ->
@@ -514,37 +508,6 @@ module T = struct
     | TGen t' ->
         Tensor.Uop_generic.to_ustring el2str t' )
     |> Mseq.Helpers.of_ustring
-
-  module Helpers = struct
-    let to_genarray_clayout (type a b) (t : (a, b) u) :
-        (a, b, c_layout) Genarray.t =
-      match t with
-      | TInt t' ->
-          Tensor.Barray.to_genarray_clayout t'
-      | TFloat t' ->
-          Tensor.Barray.to_genarray_clayout t'
-      | TGen _ ->
-          raise
-            (Invalid_argument "Intrinsics.T.Helpers.to_genarray_clayout_int")
-
-    let to_array1_clayout t = to_genarray_clayout t |> array1_of_genarray
-
-    let to_array2_clayout t = to_genarray_clayout t |> array2_of_genarray
-
-    let of_genarray_clayout (type a b) (a : (a, b, c_layout) Genarray.t) :
-        (a, b) u =
-      match Genarray.kind a with
-      | Bigarray.Int ->
-          TInt (Tensor.Barray.of_genarray_clayout a)
-      | Bigarray.Float64 ->
-          TFloat (Tensor.Barray.of_genarray_clayout a)
-      | _ ->
-          raise (Invalid_argument "Intrinsics.T.Helpers.of_genarray_clayout")
-
-    let of_array1_clayout t = genarray_of_array1 t |> of_genarray_clayout
-
-    let of_array2_clayout t = genarray_of_array2 t |> of_genarray_clayout
-  end
 end
 
 module Symb = struct

@@ -449,6 +449,16 @@ lang OCamlDataConversionBigArray = OCamlDataConversionHelpers + OCamlAst
   ->
     if eqi rank1 rank2 then (0, t)
     else errorSingle [info] "Bigarray rank mismatch"
+  | ( TyTensor {ty = elty1}, OTyMTensor {ty = elty2} ) ->
+    match (elty1, elty2) with (TyInt _, TyInt _) | (TyFloat _, TyFloat _) then
+      (0, t)
+    else
+      errorSingle [info] "Cannot convert to MTensor"
+  | ( OTyMTensor {ty = elty1}, TyTensor {ty = elty2} ) ->
+    match (elty1, elty2) with (TyInt _, TyInt _) | (TyFloat _, TyFloat _) then
+      (0, t)
+    else
+      errorSingle [info] "Cannot convert to MTensor"
   | (TyTensor {ty = elty1} & ty1
     ,OTyBigarrayGenarray
       {ty = elty2, elty = elty3, layout = OTyBigarrayClayout _})

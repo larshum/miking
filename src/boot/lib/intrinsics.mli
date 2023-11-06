@@ -243,107 +243,86 @@ module Mseq : sig
 end
 
 module T : sig
-  open Bigarray
-
   type 'a t =
-    | TBootInt of (int, int_elt) Tensor.Barray.t
-    | TBootFloat of (float, float64_elt) Tensor.Barray.t
-    | TBootGen of ('a, 'a) Tensor.Generic.t
+    | TBootInt of int Tensor.Barray.t
+    | TBootFloat of float Tensor.Barray.t
+    | TBootGen of 'a Tensor.Generic.t
 
-  type ('a, 'b) u =
-    | TInt : (int, int_elt) Tensor.Barray.t -> (int, int_elt) u
-    | TFloat : (float, float64_elt) Tensor.Barray.t -> (float, float64_elt) u
-    | TGen : ('a, 'b) Tensor.Generic.t -> ('a, 'b) u
+  type 'a u =
+    | TInt : int Tensor.Barray.t -> int u
+    | TFloat : float Tensor.Barray.t -> float u
+    | TGen : 'a Tensor.Generic.t -> 'a u
 
   module type OP_MSEQ = sig
-    type ('a, 'b) t
+    type 'a t
 
-    val get_exn : ('a, 'b) t -> int Mseq.t -> 'a
+    val get_exn : 'a t -> int Mseq.t -> 'a
 
-    val set_exn : ('a, 'b) t -> int Mseq.t -> 'a -> unit
+    val set_exn : 'a t -> int Mseq.t -> 'a -> unit
 
-    val linear_get_exn : ('a, 'b) t -> int -> 'a
+    val linear_get_exn : 'a t -> int -> 'a
 
-    val linear_set_exn : ('a, 'b) t -> int -> 'a -> unit
+    val linear_set_exn : 'a t -> int -> 'a -> unit
 
-    val shape : ('a, 'b) t -> int Mseq.t
+    val shape : 'a t -> int Mseq.t
 
-    val reshape_exn : ('a, 'b) t -> int Mseq.t -> ('a, 'b) t
+    val reshape_exn : 'a t -> int Mseq.t -> 'a t
 
-    val slice_exn : ('a, 'b) t -> int Mseq.t -> ('a, 'b) t
+    val slice_exn : 'a t -> int Mseq.t -> 'a t
   end
 
-  module Op_mseq_generic :
-    OP_MSEQ with type ('a, 'b) t = ('a, 'b) Tensor.Generic.t
+  module Op_mseq_generic : OP_MSEQ with type 'a t = 'a Tensor.Generic.t
 
-  module Op_mseq_barray :
-    OP_MSEQ with type ('a, 'b) t = ('a, 'b) Tensor.Barray.t
+  module Op_mseq_barray : OP_MSEQ with type 'a t = 'a Tensor.Barray.t
 
-  val uninit_int : int Mseq.t -> (int, int_elt) Tensor.Barray.t
+  val uninit_int : int Mseq.t -> int Tensor.Barray.t
 
-  val uninit_float : int Mseq.t -> (float, float64_elt) Tensor.Barray.t
+  val uninit_float : int Mseq.t -> float Tensor.Barray.t
 
-  val create_int :
-    int Mseq.t -> (int Mseq.t -> int) -> (int, int_elt) Tensor.Barray.t
+  val create_int : int Mseq.t -> (int Mseq.t -> int) -> int Tensor.Barray.t
 
   val create_float :
-    int Mseq.t -> (int Mseq.t -> float) -> (float, float64_elt) Tensor.Barray.t
+    int Mseq.t -> (int Mseq.t -> float) -> float Tensor.Barray.t
 
-  val create_generic :
-    int Mseq.t -> (int Mseq.t -> 'a) -> ('a, 'a) Tensor.Generic.t
+  val create_generic : int Mseq.t -> (int Mseq.t -> 'a) -> 'a Tensor.Generic.t
 
-  val uninit_int_packed : int Mseq.t -> (int, int_elt) u
+  val uninit_int_packed : int Mseq.t -> int u
 
-  val uninit_float_packed : int Mseq.t -> (float, float64_elt) u
+  val uninit_float_packed : int Mseq.t -> float u
 
-  val create_int_packed : int Mseq.t -> (int Mseq.t -> int) -> (int, int_elt) u
+  val create_int_packed : int Mseq.t -> (int Mseq.t -> int) -> int u
 
-  val create_float_packed :
-    int Mseq.t -> (int Mseq.t -> float) -> (float, float64_elt) u
+  val create_float_packed : int Mseq.t -> (int Mseq.t -> float) -> float u
 
-  val create_generic_packed : int Mseq.t -> (int Mseq.t -> 'a) -> ('a, 'b) u
+  val create_generic_packed : int Mseq.t -> (int Mseq.t -> 'a) -> 'a u
 
-  val get_exn : ('a, 'b) u -> int Mseq.t -> 'a
+  val get_exn : 'a u -> int Mseq.t -> 'a
 
-  val set_exn : ('a, 'b) u -> int Mseq.t -> 'a -> unit
+  val set_exn : 'a u -> int Mseq.t -> 'a -> unit
 
-  val linear_get_exn : ('a, 'b) u -> int -> 'a
+  val linear_get_exn : 'a u -> int -> 'a
 
-  val linear_set_exn : ('a, 'b) u -> int -> 'a -> unit
+  val linear_set_exn : 'a u -> int -> 'a -> unit
 
-  val shape : ('a, 'b) u -> int Mseq.t
+  val shape : 'a u -> int Mseq.t
 
-  val reshape_exn : ('a, 'b) u -> int Mseq.t -> ('a, 'b) u
+  val reshape_exn : 'a u -> int Mseq.t -> 'a u
 
-  val slice_exn : ('a, 'b) u -> int Mseq.t -> ('a, 'b) u
+  val slice_exn : 'a u -> int Mseq.t -> 'a u
 
-  val sub_exn : ('a, 'b) u -> int -> int -> ('a, 'b) u
+  val sub_exn : 'a u -> int -> int -> 'a u
 
-  val copy : ('a, 'b) u -> ('a, 'b) u
+  val copy : 'a u -> 'a u
 
-  val transpose_exn : ('a, 'b) u -> int -> int -> ('a, 'b) u
+  val transpose_exn : 'a u -> int -> int -> 'a u
 
-  val iter_slice : (int -> ('a, 'b) u -> unit) -> ('a, 'b) u -> unit
+  val iter_slice : (int -> 'a u -> unit) -> 'a u -> unit
 
-  val rank : ('a, 'b) u -> int
+  val rank : 'a u -> int
 
-  val equal : ('a -> 'b -> bool) -> ('a, 'c) u -> ('b, 'd) u -> bool
+  val equal : ('a -> 'b -> bool) -> 'a u -> 'b u -> bool
 
-  val to_string : ('a -> int Mseq.t) -> ('a, 'b) u -> int Mseq.t
-
-  module Helpers : sig
-    val to_genarray_clayout : ('a, 'b) u -> ('a, 'b, c_layout) Genarray.t
-
-    val to_array1_clayout : ('a, 'b) u -> ('a, 'b, c_layout) Array1.t
-
-    val to_array2_clayout : ('a, 'b) u -> ('a, 'b, c_layout) Array2.t
-
-    val of_genarray_clayout : ('a, 'b, c_layout) Genarray.t -> ('a, 'b) u
-
-    val of_array1_clayout : ('a, 'b, c_layout) Array1.t -> ('a, 'b) u
-
-    val of_array2_clayout : ('a, 'b, c_layout) Array2.t -> ('a, 'b) u
-  end
+  val to_string : ('a -> int Mseq.t) -> 'a u -> int Mseq.t
 end
 
 module Symb : sig
