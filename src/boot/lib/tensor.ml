@@ -236,12 +236,14 @@ module Barray : BARRAY = struct
 
   let linear_get_exn t lidx =
     if lidx >= 0 && lidx < t.size then
-      ext_tensor_get t.data lidx t.element_type
+      let idx = lidx + t.offset in
+      ext_tensor_get t.data idx t.element_type
     else raise (Invalid_argument "Tensor.Barray.linear_get_exn")
 
   let linear_set_exn t lidx v =
     if lidx >= 0 && lidx < t.size then
-      ext_tensor_set t.data lidx v t.element_type
+      let idx = lidx + t.offset in
+      ext_tensor_set t.data idx v t.element_type
     else raise (Invalid_argument "Tensor.Barray.linear_set_exn")
 
   let rank t = t.rank

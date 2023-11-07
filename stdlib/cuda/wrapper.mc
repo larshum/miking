@@ -323,11 +323,13 @@ lang OCamlToCudaWrapper = CudaCWrapperBase
       lhs = _accessMember t.ty dst _tensorDataId,
       rhs = CEBinOp {
         op = COAdd (),
-        lhs = CECast {
-          ty = CTyPtr {ty = t.elemTy},
-          rhs = CEApp {
-            fun = _getIdentExn "Data_custom_val",
-            args = [getField tensorVal (CEInt {i = 0})]}},
+        lhs = CEUnOp {
+          op = CODeref (),
+          arg = CECast {
+            ty = CTyPtr {ty = CTyPtr {ty = t.elemTy}},
+            rhs = CEApp {
+              fun = _getIdentExn "Data_custom_val",
+              args = [getField tensorVal (CEInt {i = 0})]}}},
         rhs = longVal (getField tensorVal (CEInt {i = 3}))}}} in
     let setTensorRankStmt = CSExpr {expr = CEBinOp {
       op = COAssign (),
