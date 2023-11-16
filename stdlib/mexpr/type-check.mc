@@ -55,14 +55,22 @@ let typcheckEnvEmpty = {
 }
 
 let typecheckEnvAddBuiltinTypes : TCEnv -> [(String, [String])] -> TCEnv
-  = lam env. lam tys. {
-    env with
+  = lam env. lam tys.
+  use DataTypeAst in
+  { env with
     tyConEnv =
       foldl
         (lam env. lam t.
-          mapInsert (nameNoSym t.0) (0, map nameSym t.1, tyvariant_ []) env)
-        env.tyConEnv tys
-  }
+        let vars = map nameSym t.1 in
+        let ident = nameSym t.0 in
+        let data = TyData { info = NoInfo ()
+                          , universe = mapEmpty nameCmp
+                          , positive = false
+                          , cons = setEmpty nameCmp } in
+        let tycon = nsitycon_ ident data (NoInfo ()) in
+        mapInsert (nameNoSym t.0) (0, vars, tyapps_ tycon (map ntyvar_ vars))
+          (mapInsert ident (0, vars, tyvariant_ []) env))
+        env.tyConEnv tys }
 
 let typcheckEnvDefault =
   typecheckEnvAddBuiltinTypes typcheckEnvEmpty builtinTypes
@@ -445,16 +453,22 @@ lang MetaVarDisableGeneralize = MetaVarTypeAst
     sfold_Type_Type (lam. lam ty. disableRecordGeneralize lvl ty) () ty
 end
 
+let _computeUniverse : TCEnv -> Name -> Map Name (Set Name) =
+  lam env. lam ident.
+    mapMapWithKey (lam s. lam.
+      mapLookupOrElse (lam. setEmpty nameCmp) s env.conDeps)
+      (mapLookupOrElse (lam. setEmpty nameCmp) ident env.typeDeps)
+
 -- resolveType resolves type aliases and checks that they are fully applied.
 -- NOTE(aathn, 2023-05-10): In the future, this should be replaced
 -- with something which also performs a proper kind check.
 lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
   UnknownTypeAst + DataTypeAst + FunTypeAst + VarTypeSubstitute + AppTypeGetArgs
-  sem resolveType : Info -> TCEnv -> Type -> Type
-  sem resolveType info env =
+  sem resolveType : Info -> TCEnv -> Bool -> Type -> Type
+  sem resolveType info env closeDatas =
   | (TyCon _ | TyApp _) & ty ->
     match getTypeArgs ty with (constr, args) in
-    let args = map (resolveType info env) args in
+    let args = map (resolveType info env closeDatas) args in
     match constr with (TyCon t) & conTy then
       match mapLookup t.ident env.tyConEnv with Some (_, params, def) then
         match def with !TyVariant _ then  -- It's an alias
@@ -474,26 +488,32 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
               "* When checking the annotation"
             ])
         else
-          match t.data with TyData d then
-            let tys = mapLookupOrElse (lam. setEmpty nameCmp) t.ident env.typeDeps in
-            let universe =
-              mapMapWithKey (lam s. lam.
-                match mapLookup s env.conDeps with Some cons in
-                cons) tys
-            in
+          switch t.data
+          case TyData d then
+            let universe = _computeUniverse env t.ident in
             mkTypeApp (TyCon {t with data = TyData {d with universe = universe}}) args
-          else
+          case TyUnknown _ then
+            if closeDatas then
+              let universe = _computeUniverse env t.ident in
+              let data = TyData { info = t.info
+                                , universe = universe
+                                , positive = false
+                                , cons = setEmpty nameCmp } in
+              mkTypeApp (TyCon {t with data = data }) args
+            else mkTypeApp conTy args
+          case _ then
             mkTypeApp conTy args
+          end
       else
         errorSingle [t.info] (join [
           "* Encountered an unknown type constructor: ", nameGetStr t.ident, "\n",
           "* When checking the annotation"
         ])
     else
-      mkTypeApp (resolveType info env constr) args
+      mkTypeApp (resolveType info env closeDatas constr) args
 
   | TyAll t ->
-    let ty = resolveType info env t.ty in
+    let ty = resolveType info env closeDatas t.ty in
     match t.kind with Data d then
       let cons = mapLookupOrElse (lam. setEmpty nameCmp) (nameNoSym "") d.types in
       let types =
@@ -517,7 +537,7 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
   | TyAlias t -> TyAlias t
 
   | ty ->
-    smap_Type_Type (resolveType info env) ty
+    smap_Type_Type (resolveType info env closeDatas) ty
 end
 
 lang SubstituteUnknown = UnknownTypeAst + KindAst + AliasTypeAst
@@ -608,7 +628,7 @@ lang PatTypeCheck = TCUnify + NormPatMatch + ConNormPat
 
   sem npatHasMatches : TCEnv -> (Type, NPat) -> Bool
   sem npatHasMatches env =
-  | (ty, SNPat p) -> snpatHasMatches env ((getTypeArgs ty).0, p)
+  | (ty, SNPat p) -> snpatHasMatches env (unwrapType ty, p)
   | (ty, NPatNot cons) ->
     match getTypeArgs ty with (TyCon t, _) then
       match unwrapType t.data with TyData d then
@@ -636,10 +656,7 @@ lang PatTypeCheck = TCUnify + NormPatMatch + ConNormPat
           match unwrapType t.data with TyMetaVar r then
             match deref r.contents with Unbound u then
               let u1 =
-                if inferFull then
-                  mapMapWithKey (lam s. lam.
-                    mapLookupOrElse (lam. setEmpty nameCmp) s env.conDeps)
-                    (mapLookupOrElse (lam. setEmpty nameCmp) t.ident env.typeDeps)
+                if inferFull then _computeUniverse env t.ident
                 else mapEmpty nameCmp in
               let u2 =
                 match u.kind with Data d then d.types
@@ -691,7 +708,7 @@ end
 lang LamTypeCheck = TypeCheck + LamAst + ResolveType + SubstituteUnknown
   sem typeCheckExpr env =
   | TmLam t ->
-    let tyAnnot = resolveType t.info env t.tyAnnot in
+    let tyAnnot = resolveType t.info env false t.tyAnnot in
     let tyParam = substituteUnknown (Mono ()) env.currentLvl t.info tyAnnot in
     let body = typeCheckExpr (_insertVar t.ident tyParam env) t.body in
     let tyLam = ityarrow_ t.info tyParam (tyTm body) in
@@ -716,7 +733,7 @@ lang LetTypeCheck =
   sem typeCheckExpr env =
   | TmLet t ->
     let newLvl = addi 1 env.currentLvl in
-    let tyAnnot = resolveType t.info env t.tyAnnot in
+    let tyAnnot = resolveType t.info env false t.tyAnnot in
     let tyBody = substituteUnknown (Poly ()) newLvl t.info tyAnnot in
     match
       if isValue (GVal ()) t.body then
@@ -760,7 +777,7 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + MetaVarDisableGe
     let newLvl = addi 1 env.currentLvl in
     -- First: Generate a new environment containing the recursive bindings
     let recLetEnvIteratee = lam acc. lam b: RecLetBinding.
-      let tyAnnot = resolveType t.info env b.tyAnnot in
+      let tyAnnot = resolveType t.info env false b.tyAnnot in
       let tyBody = substituteUnknown (Poly ()) newLvl t.info tyAnnot in
       let vars = if isValue (GVal ()) b.body then (stripTyAll tyBody).0 else [] in
       let newEnv = _insertVar b.ident tyBody acc.0 in
@@ -833,11 +850,11 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst + NormPat
                   , pat = pat}
 end
 
-lang ConstTypeCheck = TypeCheck + MExprConstType + SubstituteUnknown
+lang ConstTypeCheck = TypeCheck + MExprConstType + ResolveType
   sem typeCheckExpr env =
   | TmConst t ->
     recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
-    let ty = substituteUnknown (Poly ()) env.currentLvl t.info (f (tyConst t.val)) in
+    let ty = resolveType t.info env true (f (tyConst t.val)) in
     TmConst {t with ty = inst t.info env.currentLvl ty}
 end
 
@@ -868,19 +885,15 @@ end
 lang TypeTypeCheck = TypeCheck + TypeAst + VariantTypeAst + ResolveType
   sem typeCheckExpr env =
   | TmType t ->
-    let tyIdent = resolveType t.info env t.tyIdent in
+    let tyIdent = resolveType t.info env false t.tyIdent in
     -- NOTE(aathn, 2023-05-08): Aliases are treated as the underlying
     -- type and do not need to be scope checked.
     let newLvl =
       match tyIdent with !TyVariant _ then addi 1 env.currentLvl else 0 in
     let newTyConEnv = mapInsert t.ident (newLvl, t.params, tyIdent) env.tyConEnv in
-    let newTypeDeps = mapInsert t.ident (setOfSeq nameCmp [t.ident]) env.typeDeps in
-    let newConDeps  = mapInsert t.ident (setEmpty nameCmp) env.conDeps in
     let inexpr =
       typeCheckExpr {env with currentLvl = addi 1 env.currentLvl,
-                              tyConEnv = newTyConEnv,
-                              typeDeps = newTypeDeps,
-                              conDeps = newConDeps} t.inexpr in
+                              tyConEnv = newTyConEnv} t.inexpr in
     unify env [t.info, infoTm inexpr] (newpolyvar env.currentLvl t.info) (tyTm inexpr);
     TmType {t with tyIdent = tyIdent, inexpr = inexpr, ty = tyTm inexpr}
 end
@@ -900,8 +913,7 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType
         recursive let substituteData = lam v. lam acc. lam x.
           switch x
           case TyCon (t & {data = TyUnknown _}) then
-            (if nameEq t.ident target.ident then acc else setInsert t.ident acc,
-             TyCon { t with data = v })
+            (setInsert t.ident acc, TyCon { t with data = v })
           case TyAlias t then
             match substituteData v acc t.content with (acc, content) in
             (acc, TyAlias { t with content = content })
@@ -926,7 +938,7 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType
 
   sem typeCheckExpr env =
   | TmConDef t ->
-    let tyIdent = resolveType t.info env t.tyIdent in
+    let tyIdent = resolveType t.info env false t.tyIdent in
     match _makeConstructorType t.info t.ident tyIdent with (target, tydeps, tyIdent) in
     let newLvl = addi 1 env.currentLvl in
     let inexpr =
@@ -1021,7 +1033,7 @@ end
 lang ExtTypeCheck = TypeCheck + ExtAst + ResolveType
   sem typeCheckExpr env =
   | TmExt t ->
-    let tyIdent = resolveType t.info env t.tyIdent in
+    let tyIdent = resolveType t.info env true t.tyIdent in
     let env = {env with varEnv = mapInsert t.ident tyIdent env.varEnv} in
     let inexpr = typeCheckExpr env t.inexpr in
     TmExt {t with tyIdent = tyIdent, inexpr = inexpr, ty = tyTm inexpr}
@@ -1112,10 +1124,10 @@ lang DataPatTypeCheck = PatTypeCheck + DataPat + ConNormPat + FunTypeAst + Gener
       errorSingle [t.info] msg
 
   sem snpatHasMatches env =
-  | (TyCon t, NPatCon {ident = c, subpat = p}) ->
-    match mapLookup c env.conEnv with Some (_, ty) then
-      match inst t.info env.currentLvl ty with TyArrow {from = from, to = to} in
-      unify env [t.info] (TyCon t) to;
+  | (ty, NPatCon {ident = c, subpat = p}) ->
+    match mapLookup c env.conEnv with Some (_, tycon) then
+      match inst (infoTy ty) env.currentLvl tycon with TyArrow {from = from, to = to} in
+      unify env [infoTy ty] ty to;
       npatHasMatches env (from, p)
     else
       error "Should not happen!"
