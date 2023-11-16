@@ -81,9 +81,9 @@ let _stringTy = _seqTy _charTy
 let _tensorTy = lam ty.
   use MExprAst in
   TyTensor {ty = ty, info = _utestInfo}
-let _conTy = lam id.
+let _conTy = lam id. lam d.
   use MExprAst in
-  TyCon {ident = id, info = _utestInfo}
+  TyCon {ident = id, data = d, info = _utestInfo}
 let _varTy = lam id.
   use MExprAst in
   TyVar {ident = id, info = _utestInfo}
@@ -360,7 +360,9 @@ lang UtestBase =
   sem specializeConstructorArgumentH : Map Name Type -> ([Type], Type) -> Type
   sem specializeConstructorArgumentH subMap =
   | ([], TyArrow {from = argTy}) -> substituteVars subMap argTy
-  | ([tyArg] ++ tyArgs, TyAll {ident = ident, ty = ty}) ->
+  | (tyArgs, TyAll {kind = Data _, ty = ty}) ->
+    specializeConstructorArgumentH subMap (tyArgs, ty)
+  | ([tyArg] ++ tyArgs, TyAll {ident = ident, ty = ty, kind = !Data _}) ->
     specializeConstructorArgumentH
       (mapInsert ident tyArg subMap) (tyArgs, ty)
   | (_, ty) -> errorSingle [infoTy ty] "Invalid constructor application"

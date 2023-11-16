@@ -96,11 +96,8 @@ lang MetaVarTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + MetaVarT
   | TyMetaVar t ->
     switch deref t.contents
     case Unbound t then
-      match pprintVarName env t.ident with (env, idstr) in
-      match getKindStringCode indent env idstr t.kind with (env, str) in
-      let monoPrefix =
-        match t.kind with Mono _ then "_" else "" in
-      (env, concat monoPrefix str)
+      match pprintVarName env t.ident with (env, str) in
+      (env, concat "_" str)
     case Link ty then
       getTypeStringCode indent env ty
     end
@@ -133,8 +130,8 @@ let newmonovar = use KindAst in
   newmetavar (Mono ())
 let newpolyvar = use KindAst in
   newmetavar (Poly ())
-let newrowvar = use KindAst in
-  lam fields. newmetavar (Row {fields = fields})
+let newrecvar = use KindAst in
+  lam fields. newmetavar (Record {fields = fields})
 
 let newvar = newpolyvar
 
@@ -162,11 +159,13 @@ end
 -- Returns the argument list in a type application
 lang AppTypeGetArgs = AppTypeAst
   sem getTypeArgs =
-  | TyApp t ->
-    match getTypeArgs t.lhs with (tycon, args) in
-    (tycon, snoc args t.rhs)
   | ty ->
-    (ty, [])
+    match getTypeArgsBase [] ty with (args, tycon) in
+    (tycon, args)
+
+  sem getTypeArgsBase (args : [Type]) =
+  | TyApp t -> getTypeArgsBase (cons t.rhs args) t.lhs
+  | ty -> rappAccumL_Type_Type getTypeArgsBase args ty
 end
 
 -- Return the type (TyCon) which a constructor (TmConDef) belongs to.

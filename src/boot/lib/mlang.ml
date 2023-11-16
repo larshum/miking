@@ -340,8 +340,8 @@ module NoCap = struct
     else (env, name)
 
   let rec subst_ty (env : big_env) : ty -> ty = function
-    | TyCon (fi, name) ->
-       TyCon (fi, subst_name name env.ty_cons)
+    | TyCon (fi, name, data) ->
+       TyCon (fi, subst_name name env.ty_cons, data)
     | TyUse (fi, _, _) -> raise_error fi
                    ( "Compiler limitation: we can't easily rename syns or sems if 'use' is somewhere in the language fragment." )
     | ty -> smap_ty_ty (subst_ty env) ty
@@ -532,10 +532,10 @@ let merge_env_prefer_right : mlang_env -> mlang_env -> mlang_env = fun a b ->
   }
 
 let rec translate_ty (env : mlang_env) : ty -> ty = function
-  | TyCon (fi, id) ->
+  | TyCon (fi, id, data) ->
      begin match Record.find_opt id env.ty_cons with
-     | Some id -> TyCon (fi, id)
-     | None -> TyCon (fi, empty_mangle id)
+     | Some id -> TyCon (fi, id, data)
+     | None -> TyCon (fi, empty_mangle id, data)
      end
   | TyUse (fi, lang, ty) ->
      begin match Record.find_opt lang env.language_envs with
@@ -762,10 +762,10 @@ let wrap_cons : mlang_env -> lang_data -> tm -> tm = fun env lang tm ->
     |> Seq.map (fun (_, c) -> (name, c)) in
   let wrap_con (tm : tm) ((name : ustring), (con : syn_case)) =
     let wrap_all (tyvar : ustring) (ty : ty) =
-      TyAll (con.fi, tyvar, ty) in
+      TyAll (con.fi, tyvar, None, ty) in
     let wrap_app (ty : ty) (tyvar : ustring) =
       TyApp (con.fi, ty, TyVar (con.fi, tyvar)) in
-    let ret = List.fold_left wrap_app (TyCon (con.fi, name)) con.ty_params in
+    let ret = List.fold_left wrap_app (TyCon (con.fi, name, None)) con.ty_params in
     let ty = TyArrow (con.fi, con.carried, ret) in
     let ty = List.fold_right wrap_all con.ty_params ty in
     TmConDef

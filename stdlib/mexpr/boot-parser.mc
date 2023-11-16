@@ -273,8 +273,23 @@ lang BootParser = MExprAst + ConstTransformer
                  constrs = mapEmpty nameCmp}
     else error "Parsing of non-empty variant types not yet supported"
   | 209 /-TyCon-/ ->
+    let data =
+      let makeData = lam positive.
+        let cons = setOfSeq nameCmp (map (gname t) (range 1 (glistlen t 0) 1)) in
+        TyData { info = ginfo t 0, universe = mapEmpty nameCmp,
+                 positive = positive, cons = cons }
+      in
+      switch gint t 0
+      case 0 then TyUnknown { info = ginfo t 0 }
+      case 1 then makeData true
+      case 2 then makeData false
+      case 3 then TyVar { info = ginfo t 0, ident = gname t 1 }
+      case _ then error "BootParser.matchTerm: Invalid data specifier for TyCon"
+      end
+    in
     TyCon {info = ginfo t 0,
-           ident = gname t 0}
+           ident = gname t 0,
+           data = data}
   | 210 /-TyVar-/ ->
     TyVar {info = ginfo t 0,
            ident = gname t 0}
@@ -286,10 +301,19 @@ lang BootParser = MExprAst + ConstTransformer
     TyTensor {info = ginfo t 0,
               ty = gtype t 0}
   | 213 /-TyAll-/ ->
+    let kind =
+      switch gint t 0
+      case 0 then Poly ()
+      case 1 then
+        let cons = setOfSeq nameCmp (map (gname t) (range 1 (glistlen t 0) 1)) in
+        Data { types = mapFromSeq nameCmp [(nameNoSym "", cons)] }
+      case _ then error "BootParser.matchTerm: Invalid data specifier for TyAll"
+      end
+    in
     TyAll {info = ginfo t 0,
            ident = gname t 0,
            ty = gtype t 0,
-           kind = Poly ()}
+           kind = kind}
 
 
   -- Get constant help function

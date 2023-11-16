@@ -64,6 +64,15 @@ lang TypeLiftBase = MExprAst + VariantNameTypeAst
     variants: Map Name (Map Name Type)
   }
 
+  sem addRecordToEnv (env : TypeLiftEnv) =
+  -- Intentionally left blank
+
+  sem addSeqToEnv (env: TypeLiftEnv) =
+  -- Intentionally left blank
+
+  sem addTensorToEnv (env : TypeLiftEnv) =
+  -- Intentionally left blank
+
   -- Replaces all variant type names with the variant type they represent. This
   -- function is called after going through the program, at which point all
   -- variant constructors have been identified.
@@ -82,16 +91,35 @@ lang TypeLiftBase = MExprAst + VariantNameTypeAst
     assocSeqMap f env.typeEnv
 end
 
+lang TypeLiftAddRecordToEnv = TypeLiftBase + RecordTypeAst
+  sem addRecordToEnv (env : TypeLiftEnv) =
+  | TyRecord {fields = fields, info = info} & ty ->
+    switch mapLookup fields env.records
+    case Some name then
+      let tycon = nitycon_ name info in
+      (env, tycon)
+    case None _ then
+      let name = nameSym "Rec" in
+      let tycon = nitycon_ name info in
+      let env = {{env
+                  with records = mapInsert fields name env.records}
+                  with typeEnv = assocSeqInsert name ty env.typeEnv}
+      in
+      (env, tycon)
+    end
+  -- | ty -> (env, ty) -- NOTE(dlunde,2021-10-06): I commented this out, so that it gives an error if a TyRecord is not supplied (less error-prone)
+end
+
 -- Define function for adding sequence types to environment
 lang TypeLiftAddSeqToEnv = TypeLiftBase + SeqTypeAst + ConTypeAst
   sem addSeqToEnv (env: TypeLiftEnv) =
   | TySeq {info = info, ty = innerTy} & ty ->
     match mapLookup innerTy env.seqs with Some name then
-      let tycon = TyCon {ident = name, info = info} in
+      let tycon = nitycon_ name info in
       (env, tycon)
     else
       let name = nameSym "Seq" in
-      let tycon = TyCon {ident = name, info = info} in
+      let tycon = nitycon_ name info in
       let env = {{env with seqs = mapInsert innerTy name env.seqs}
                       with typeEnv = assocSeqInsert name ty env.typeEnv}
       in
@@ -102,11 +130,11 @@ lang TypeLiftAddTensorToEnv = TypeLiftBase + TensorTypeAst + ConTypeAst
   sem addTensorToEnv (env : TypeLiftEnv) =
   | TyTensor {info = info, ty = innerTy} & ty ->
     match mapLookup innerTy env.tensors with Some name then
-      let tycon = TyCon {ident = name, info = info} in
+      let tycon = nitycon_ name info in
       (env, tycon)
     else
       let name = nameSym "Tensor" in
-      let tycon = TyCon {ident = name, info = info} in
+      let tycon = nitycon_ name info in
       let env = {{env with tensors = mapInsert innerTy name env.tensors}
                       with typeEnv = assocSeqInsert name ty env.typeEnv}
       in
@@ -118,10 +146,6 @@ end
 -----------
 
 lang TypeLift = TypeLiftBase + Cmp
-
-  sem addRecordToEnv (env : TypeLiftEnv) =
-  -- Intentionally left blank
-
   sem typeLiftExpr (env : TypeLiftEnv) =
   | t ->
     -- Lift all sub-expressions
@@ -166,25 +190,6 @@ lang TypeLift = TypeLiftBase + Cmp
       let typeEnv = _replaceVariantNamesInTypeEnv env in
       (typeEnv, t)
     else never
-end
-
-lang TypeLiftAddRecordToEnv = TypeLift + RecordTypeAst
-  sem addRecordToEnv (env : TypeLiftEnv) =
-  | TyRecord {fields = fields, info = info} & ty ->
-    switch mapLookup fields env.records
-    case Some name then
-      let tycon = TyCon {ident = name, info = info} in
-      (env, tycon)
-    case None _ then
-      let name = nameSym "Rec" in
-      let tycon = TyCon {ident = name, info = info} in
-      let env = {{env
-                  with records = mapInsert fields name env.records}
-                  with typeEnv = assocSeqInsert name ty env.typeEnv}
-      in
-      (env, tycon)
-    end
-  -- | ty -> (env, ty) -- NOTE(dlunde,2021-10-06): I commented this out, so that it gives an error if a TyRecord is not supplied (less error-prone)
 end
 
 lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +

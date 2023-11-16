@@ -632,7 +632,17 @@ lang ConTypeEq = Eq + ConTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | rhs & TyCon r ->
     match unwrapType lhs with TyCon l then
-      if nameEq l.ident r.ident then Some free else None ()
+      if nameEq l.ident r.ident then eqTypeH typeEnv free l.data r.data
+      else None ()
+    else None ()
+end
+
+lang DataTypeEq = Eq + DataTypeAst
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  | rhs & TyData r ->
+    match unwrapType lhs with TyData l then
+      if mapEq setEq (computeData l) (computeData r) then Some free
+      else None ()
     else None ()
 end
 
@@ -648,7 +658,7 @@ end
 
 lang KindEq = Eq + KindAst
   sem eqKind (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) =
-  | (Row l, Row r) ->
+  | (Record l, Record r) ->
       if eqi (mapSize l.fields) (mapSize r.fields) then
         mapFoldlOption
           (lam free. lam k1. lam v1.
@@ -657,6 +667,9 @@ lang KindEq = Eq + KindAst
             else None ())
           free l.fields
       else None ()
+  | (Data l, Data r) ->
+    if mapEq setEq l.types r.types then Some free
+    else None ()
   | (lhs, rhs) ->
     if eqi (constructorTag lhs) (constructorTag rhs) then Some free
     else None ()
@@ -710,8 +723,8 @@ lang MExprEq =
 
   -- Types
   + UnknownTypeEq + BoolTypeEq + IntTypeEq + FloatTypeEq + CharTypeEq +
-  FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + ConTypeEq + VarTypeEq +
-  AllTypeEq + AppTypeEq + TensorTypeEq + AliasTypeEq
+  FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + ConTypeEq + DataTypeEq +
+  VarTypeEq + AllTypeEq + AppTypeEq + TensorTypeEq + AliasTypeEq
 end
 
 -----------
