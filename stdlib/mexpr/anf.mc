@@ -28,6 +28,8 @@ lang ANF = LetAst + VarAst + UnknownTypeAst
   sem normalize (k : Expr -> Expr) =
   -- Intentionally left blank
 
+  sem normalizeNames : (Expr -> Expr) -> Expr -> Expr
+
   sem bind (k : Expr -> Expr) =
   | n ->
     let ident = nameSym "t" in

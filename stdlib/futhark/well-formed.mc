@@ -158,7 +158,8 @@ lang FutharkWellFormed = WellFormed + PMExprAst
   | t -> futharkWellFormedType acc t
 end
 
-lang TestLang = FutharkWellFormed + PMExprAst
+lang TestLang =
+  FutharkWellFormed + PMExprAst + MExprSym + MExprTypeCheck + MExprEq
 end
 
 mexpr

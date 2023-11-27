@@ -80,7 +80,7 @@ lang PMExprUtestSizeConstraint = PMExprAst
   | t -> smap_Expr_Expr replaceUtestsWithSizeConstraint t
 end
 
-lang TestLang = PMExprUtestSizeConstraint + TypeCheck
+lang TestLang = PMExprUtestSizeConstraint + MExprTypeCheck + MExprSym + MExprEq
 end
 
 mexpr

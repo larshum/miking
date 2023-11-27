@@ -3,52 +3,9 @@ include "pmexpr/ast.mc"
 include "pmexpr/function-properties.mc"
 include "pmexpr/utils.mc"
 
-type VarPattern
-con PatternIndex : Int -> VarPattern
-con PatternName : Name -> VarPattern
-con PatternLiteralInt : Int -> VarPattern
-
-let varPatternIndex : VarPattern -> Int = lam p.
-  match p with PatternIndex _ then 0
-  else match p with PatternName _ then 1
-  else match p with PatternLiteralInt _ then 2
-  else never
-
-let cmpVarPattern : VarPattern -> VarPattern -> Int = lam p1. lam p2.
-  let diff = subi (varPatternIndex p1) (varPatternIndex p2) in
-  if eqi diff 0 then
-    let p = (p1, p2) in
-    match p with (PatternIndex i1, PatternIndex i2) then
-      subi i1 i2
-    else match p with (PatternName n1, PatternName n2) then
-      nameCmp n1 n2
-    else match p with (PatternLiteralInt i1, PatternLiteralInt i2) then
-      subi i1 i2
-    else never
-  else diff
-
-let varPatString : VarPattern -> String = lam pat.
-  match pat with PatternIndex i then
-    concat "PatternIndex " (int2string i)
-  else match pat with PatternName n then
-    let symStr =
-      match nameGetSym n with Some sym then
-        int2string (sym2hash sym)
-      else "?"
-    in
-    join ["PatternName (", nameGetStr n, ", ", symStr, ")"]
-  else match pat with PatternLiteralInt n then
-    concat "PatternLiteralInt " (int2string n)
-  else never
-
-type AtomicPattern
-con AppPattern : {id : Int, fn : Expr, vars : [VarPattern]} -> AtomicPattern
-con UnknownOpPattern : {id : Int, vars : [VarPattern]} -> AtomicPattern
-con BranchPattern : {id : Int, cond : VarPattern, thn : [AtomicPattern],
-                        els : [AtomicPattern]} -> AtomicPattern
-con RecursionPattern : {id : Int, binds : [(Name, VarPattern)]} -> AtomicPattern
-con ReturnPattern : {id : Int, var : VarPattern} -> AtomicPattern
-
+-- TODO(larshum, 2023-11-27): We'll need to move this alias into the below
+-- language fragment AND add type-level use's to get correct behavior, once we
+-- get the nominal type-checking working.
 type Pattern = {
   atomicPatternMap : Map Int AtomicPattern,
   activePatterns : [Int],
@@ -56,131 +13,184 @@ type Pattern = {
   replacement : Info -> Map VarPattern (Name, Expr) -> Expr
 }
 
-let getPatternIndex : AtomicPattern -> Int = lam p.
-  match p with AppPattern t then t.id
-  else match p with UnknownOpPattern t then t.id
-  else match p with BranchPattern t then t.id
-  else match p with RecursionPattern t then t.id
-  else match p with ReturnPattern t then t.id
-  else never
+lang PMExprParallelPatterns =
+  PMExprAst + PMExprVariableSub + PMExprFunctionProperties + MExprEq
 
-let getShallowVarPatternDependencies : AtomicPattern -> [VarPattern] = lam p.
-  match p with AppPattern t then t.vars
-  else match p with UnknownOpPattern t then t.vars
-  else match p with BranchPattern t then [t.cond]
-  else match p with RecursionPattern t then
+  syn VarPattern =
+  | PatternIndex Int
+  | PatternName Name
+  | PatternLiteralInt Int
+
+  sem varPatternIndex : VarPattern -> Int
+  sem varPatternIndex =
+  | p -> constructorTag p
+
+  sem cmpVarPattern : VarPattern -> VarPattern -> Int
+  sem cmpVarPattern p1 =
+  | p2 ->
+    let diff = subi (varPatternIndex p1) (varPatternIndex p2) in
+    if eqi diff 0 then
+      let p = (p1, p2) in
+      match p with (PatternIndex i1, PatternIndex i2) then
+        subi i1 i2
+      else match p with (PatternName n1, PatternName n2) then
+        nameCmp n1 n2
+      else match p with (PatternLiteralInt i1, PatternLiteralInt i2) then
+        subi i1 i2
+      else never
+    else diff
+
+  sem varPatString : VarPattern -> String
+  sem varPatString =
+  | PatternIndex i ->
+    concat "PatternIndex " (int2string i)
+  | PatternName n ->
+    let symStr =
+      match nameGetSym n with Some sym then
+        int2string (sym2hash sym)
+      else "?"
+    in
+    join ["PatternName (", nameGetStr n, ", ", symStr, ")"]
+  | PatternLiteralInt n ->
+    concat "PatternLiteralInt " (int2string n)
+
+  syn AtomicPattern =
+  | AppPattern {id : Int, fn : Expr, vars : [VarPattern]}
+  | UnknownOpPattern {id : Int, vars : [VarPattern]}
+  | BranchPattern {id : Int, cond : VarPattern, thn : [AtomicPattern],
+                   els : [AtomicPattern]}
+  | RecursionPattern {id : Int, binds : [(Name, VarPattern)]}
+  | ReturnPattern {id : Int, var : VarPattern}
+
+  sem getPatternIndex : AtomicPattern -> Int
+  sem getPatternIndex =
+  | AppPattern t -> t.id
+  | UnknownOpPattern t -> t.id
+  | BranchPattern t -> t.id
+  | RecursionPattern t -> t.id
+  | ReturnPattern t -> t.id
+
+  sem getShallowVarPatternDependencies : AtomicPattern -> [VarPattern]
+  sem getShallowVarPatternDependencies =
+  | AppPattern t -> t.vars
+  | UnknownOpPattern t -> t.vars
+  | BranchPattern t -> [t.cond]
+  | RecursionPattern t ->
     match unzip t.binds with (names, vars) then
       join [map (lam n. PatternName n) names, vars]
     else never
-  else match p with ReturnPattern t then [t.var]
-  else never
+  | ReturnPattern t -> [t.var]
 
-let getInnerPatterns : AtomicPattern -> Option [AtomicPattern] = lam p.
-  match p with AppPattern _ then None ()
-  else match p with UnknownOpPattern _ then None ()
-  else match p with BranchPattern t then Some (concat t.thn t.els)
-  else match p with RecursionPattern _ then None ()
-  else match p with ReturnPattern _ then None ()
-  else never
+  sem getInnerPatterns : AtomicPattern -> Option [AtomicPattern]
+  sem getInnerPatterns =
+  | AppPattern _ -> None ()
+  | UnknownOpPattern _ -> None ()
+  | BranchPattern t -> Some (concat t.thn t.els)
+  | RecursionPattern _ -> None ()
+  | ReturnPattern _ -> None ()
 
--- Constructs a mapping from every pattern index to a set containing the
--- indices of patterns on which the pattern depends on. A pattern is considered
--- to depend on a pattern with index i if it contains a PatternIndex i.
---
--- This function is implemented with the assumption that every pattern has been
--- given a unique index. If multiple patterns with the same index are found, an
--- error will be reported.
-let getPatternDependencies : [AtomicPattern] -> ([Int], Map Int (Set Int)) =
-  lam atomicPatterns.
-  recursive let atomicPatternDependencies =
-    lam dependencies : Map Int (Set Int). lam p : AtomicPattern.
-    let id = getPatternIndex p in
-    match mapLookup id dependencies with None () then
-      let patternDeps : Set Int =
-        foldl
-          (lam patternDeps : Set Int. lam v : VarPattern.
-            match v with PatternIndex i then
-              setInsert i patternDeps
-            else patternDeps)
-          (setEmpty subi)
-          (getShallowVarPatternDependencies p) in
-      mapInsert id patternDeps dependencies
+  -- Constructs a mapping from every pattern index to a set containing the
+  -- indices of patterns on which the pattern depends on. A pattern is considered
+  -- to depend on a pattern with index i if it contains a PatternIndex i.
+  --
+  -- This function is implemented with the assumption that every pattern has been
+  -- given a unique index. If multiple patterns with the same index are found, an
+  -- error will be reported.
+  sem getPatternDependencies : [AtomicPattern] -> ([Int], Map Int (Set Int))
+  sem getPatternDependencies =
+  | atomicPatterns ->
+    recursive let atomicPatternDependencies =
+      lam dependencies : Map Int (Set Int). lam p : AtomicPattern.
+      let id = getPatternIndex p in
+      match mapLookup id dependencies with None () then
+        let patternDeps : Set Int =
+          foldl
+            (lam patternDeps : Set Int. lam v : VarPattern.
+              match v with PatternIndex i then
+                setInsert i patternDeps
+              else patternDeps)
+            (setEmpty subi)
+            (getShallowVarPatternDependencies p) in
+        mapInsert id patternDeps dependencies
+      else
+        error (join ["Found multiple atomic patterns with id ",
+                     int2string id])
+    in
+    let dependencyMap =
+      foldl atomicPatternDependencies (mapEmpty subi) atomicPatterns in
+    let activePatterns = mapFoldWithKey
+      (lam acc. lam k. lam v.
+        if eqi (setSize v) 0 then
+          snoc acc k
+        else acc)
+      []
+      dependencyMap in
+    let dependencies = mapAccumL
+      (lam deps. lam i.
+        (mapRemove i deps, i)) dependencyMap activePatterns in
+    (activePatterns, dependencies.0)
+
+  -- Add the dependencies to the ParallelPattern structure. We add them to the
+  -- structure to avoid having to recompute them every time an atomic pattern is
+  -- checked.
+  sem withDependencies :
+       {atomicPatterns : [AtomicPattern],
+        replacement : Info -> Map VarPattern (Name, Expr) -> Expr} -> Pattern
+  sem withDependencies =
+  | pat ->
+    recursive let work = lam acc. lam pat.
+      let idx = getPatternIndex pat in
+      let acc = cons (idx, pat) acc in
+      match getInnerPatterns pat with Some pats then
+        foldl work acc pats
+      else acc
+    in
+    match getPatternDependencies pat.atomicPatterns with (activePatterns, dependencies) in
+    let nestedPatterns = foldl work [] pat.atomicPatterns in
+    let patMap = mapFromSeq subi nestedPatterns in
+    { atomicPatternMap = patMap
+    , activePatterns = activePatterns
+    , dependencies = dependencies
+    , replacement = pat.replacement }
+
+  sem getMatch : String -> VarPattern -> Map VarPattern (Name, Expr)
+              -> (Name, Expr)
+  sem getMatch parallelPattern varPat =
+  | matches ->
+    match mapLookup varPat matches with Some (id, expr) then
+      (id, expr)
     else
-      error (join ["Found multiple atomic patterns with id ",
-                   int2string id])
-  in
-  let dependencyMap =
-    foldl atomicPatternDependencies (mapEmpty subi) atomicPatterns in
-  let activePatterns = mapFoldWithKey
-    (lam acc. lam k. lam v.
-      if eqi (setSize v) 0 then
-        snoc acc k
-      else acc)
-    []
-    dependencyMap in
-  let dependencies = mapAccumL
-    (lam deps. lam i.
-      (mapRemove i deps, i)) dependencyMap activePatterns in
-  (activePatterns, dependencies.0)
+      error (join [
+        "Pattern replacement function for ", parallelPattern,
+        " referenced unmatched variable pattern ", varPatString varPat])
 
--- Add the dependencies to the ParallelPattern structure. We add them to the
--- structure to avoid having to recompute them every time an atomic pattern is
--- checked.
-let withDependencies :
-     {atomicPatterns : [AtomicPattern],
-      replacement : Info -> Map VarPattern (Name, Expr) -> Expr} -> Pattern = lam pat.
-  recursive let work = lam acc. lam pat.
-    let idx = getPatternIndex pat in
-    let acc = cons (idx, pat) acc in
-    match getInnerPatterns pat with Some pats then
-      foldl work acc pats
-    else acc
-  in
-  match getPatternDependencies pat.atomicPatterns with (activePatterns, dependencies) in
-  let nestedPatterns = foldl work [] pat.atomicPatterns in
-  let patMap = mapFromSeq subi nestedPatterns in
-  { atomicPatternMap = patMap
-  , activePatterns = activePatterns
-  , dependencies = dependencies
-  , replacement = pat.replacement }
-
-let getMatch : String -> VarPattern -> Map VarPattern (Name, Expr)
-            -> (Name, Expr) =
-  lam parallelPattern. lam varPat. lam matches.
-  match mapLookup varPat matches with Some (id, expr) then
-    (id, expr)
-  else
-    error (join [
-      "Pattern replacement function for ", parallelPattern,
-      " referenced unmatched variable pattern ", varPatString varPat])
-
-let eliminateUnusedLetExpressions : Expr -> Expr =
-  use PMExprAst in
-  lam e.
-  recursive let collectVariables = lam acc. lam expr.
-    match expr with TmVar {ident = ident} then
-      setInsert ident acc
-    else sfold_Expr_Expr collectVariables acc expr
-  in
-  recursive let work = lam acc. lam expr.
-    match expr with TmVar {ident = ident} then
-      (setInsert ident acc, expr)
-    else match expr with TmLet t then
-      match work acc t.inexpr with (acc, inexpr) in
-      if setMem t.ident acc then
-        let acc = collectVariables acc t.body in
-        (acc, TmLet {t with inexpr = inexpr})
-      else (acc, inexpr)
-    else smapAccumL_Expr_Expr work acc expr
-  in
-  match work (setEmpty nameCmp) e with (_, e) in
-  e
+  sem eliminateUnusedLetExpressions : Expr -> Expr
+  sem eliminateUnusedLetExpressions =
+  | e ->
+    recursive let collectVariables = lam acc. lam expr.
+      match expr with TmVar {ident = ident} then
+        setInsert ident acc
+      else sfold_Expr_Expr collectVariables acc expr
+    in
+    recursive let work = lam acc. lam expr.
+      match expr with TmVar {ident = ident} then
+        (setInsert ident acc, expr)
+      else match expr with TmLet t then
+        match work acc t.inexpr with (acc, inexpr) in
+        if setMem t.ident acc then
+          let acc = collectVariables acc t.body in
+          (acc, TmLet {t with inexpr = inexpr})
+        else (acc, inexpr)
+      else smapAccumL_Expr_Expr work acc expr
+    in
+    match work (setEmpty nameCmp) e with (_, e) in
+    e
+end
 
 -- Definition of the map pattern
 let mapPatRef : Ref (Option Pattern) = ref (None ())
-let mapPattern : () -> Pattern =
-  use PMExprVariableSub in
-  lam.
+let mapPattern : () -> Pattern = lam.
+  use PMExprParallelPatterns in
   let s = nameSym "s" in
   let acc = nameSym "acc" in
   let atomicPatterns = [
@@ -256,9 +266,8 @@ let getMapPattern = lam.
 
 -- Definition of the 'parallelMap2' pattern
 let map2PatRef : Ref (Option Pattern) = ref (None ())
-let map2Pattern : () -> Pattern =
-  use PMExprVariableSub in
-  lam.
+let map2Pattern : () -> Pattern = lam.
+  use PMExprParallelPatterns in
   let s1 = nameSym "s1" in
   let s2 = nameSym "s2" in
   let acc = nameSym "acc" in
@@ -346,10 +355,8 @@ let getMap2Pattern = lam.
 
 -- Definition of the fold pattern
 let reducePatRef : Ref (Option Pattern) = ref (None ())
-let reducePattern : () -> Pattern =
-  use PMExprVariableSub in
-  use PMExprFunctionProperties in
-  lam.
+let reducePattern : () -> Pattern = lam.
+  use PMExprParallelPatterns in
   let s = nameSym "s" in
   let acc = nameSym "acc" in
   let atomicPatterns = [

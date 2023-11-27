@@ -206,9 +206,11 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
   | ty -> cudaWellFormedType acc ty
 end
 
+lang Test = CudaWellFormed + MExprSym + MExprTypeCheck end
+
 mexpr
 
-use CudaWellFormed in
+use Test in
 
 let eqCudaError = lam lerr : WFError. lam rerr : WFError.
   use MExprEq in

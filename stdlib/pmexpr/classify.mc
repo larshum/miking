@@ -135,7 +135,7 @@ end
 
 mexpr
 
-use PMExprClassify in
+use TestLang in
 
 let cmpResult : (String, Class) -> (String, Class) -> Int = lam lhs. lam rhs.
   cmpString lhs.0 rhs.0
@@ -148,7 +148,7 @@ let classifyExpr : Expr -> [(String, Class)] = lam expr.
     cmpResult
     (map
       (lam result. match result with (id, (_, class)) in (nameGetStr id, class))
-      (mapBindings classification))  
+      (mapBindings classification))
 in
 
 utest classifyExpr (addi_ (int_ 1) (int_ 2)) with [("", Any ())] in

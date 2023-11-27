@@ -246,7 +246,7 @@ end
 
 lang PMExprDemote =
   PMExprDemoteAccelerate + PMExprDemoteFlatten + PMExprDemoteMap2 +
-  PMExprDemoteReduce + PMExprDemoteLoop + PMExprDemotePrintFloat
+  PMExprDemoteReduce + PMExprDemoteLoop + PMExprDemotePrintFloat + MExprEq
 end
 
 mexpr

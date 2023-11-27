@@ -65,7 +65,7 @@ lang PMExprPromote = PMExprAst + PMExprFunctionProperties
   | t -> smap_Expr_Expr promote t
 end
 
-lang TestLang = PMExprPromote + MExprTypeCheck end
+lang TestLang = PMExprPromote + MExprTypeCheck + MExprSym + MExprEq end
 
 mexpr
 

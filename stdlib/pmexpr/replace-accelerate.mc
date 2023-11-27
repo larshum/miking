@@ -13,8 +13,7 @@ include "pmexpr/extract.mc"
 include "pmexpr/utils.mc"
 
 lang PMExprReplaceAccelerate =
-  PMExprAst + PMExprExtractAccelerate + OCamlDataConversionMExpr + OCamlTopAst +
-  OCamlPrettyPrint
+  PMExprAst + PMExprExtractAccelerate + OCamlDataConversionMExpr + OCamlTopAst
 
   sem _tensorToOCamlType =
   | TyTensor {ty = ty & (TyInt _ | TyFloat _), info = info} ->

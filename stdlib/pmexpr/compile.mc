@@ -93,7 +93,7 @@ end
 lang PMExprCompileWellFormedBase =
   PMExprCompileWellFormedInstrumentation + PMExprBuild + MExprLambdaLift +
   PMExprExtractAccelerate + PMExprNestedAccelerate + PMExprTensorCopyAnalysis +
-  PMExprClassify
+  PMExprClassify + MExprTypeCheck + PMExprPrettyPrint
 
   type WellFormedConfig = {
     dynamicChecks : Bool,

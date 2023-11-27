@@ -6,7 +6,7 @@ include "mexpr/pprint.mc"
 include "mexpr/type-check.mc"
 
 lang PMExprAst =
-  KeywordMaker + MExprAst + MExprEq + MExprANF + MExprTypeCheck
+  KeywordMaker + MExprAst + Eq + ANF + TypeCheck + PrettyPrint
 
   syn Expr =
   | TmAccelerate {e : Expr, ty : Type, info : Info}
@@ -388,9 +388,11 @@ let printFloat_ = lam e.
   use PMExprAst in
   TmPrintFloat {e = e, ty = tyunknown_, info = NoInfo ()}
 
+lang TestLang = PMExprAst + MExprEq end
+
 mexpr
 
-use PMExprAst in
+use TestLang in
 
 let id_ = ulam_ "x" (var_ "x") in
 let singleton_ = ulam_ "x" (seq_ [var_ "x"]) in

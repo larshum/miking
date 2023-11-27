@@ -1,8 +1,9 @@
 include "pmexpr/pattern-match.mc"
 include "pmexpr/parallel-patterns.mc"
+include "pmexpr/pprint.mc"
 include "pmexpr/promote.mc"
 
-lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
+lang PMExprParallelPattern = PMExprPatternMatch + PMExprPromote + PMExprVariableSub
   sem tryPatterns (patterns : [Pattern]) =
   | t ->
     let binding : RecLetBinding = t in
@@ -120,24 +121,8 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
 end
 
 lang TestLang =
-  MExprANF + PMExprRewrite + PMExprAst + PMExprTailRecursion + MExprPrettyPrint +
-  PMExprParallelPattern
-
-  sem isAtomic =
-  | TmMap2 _ -> false
-  | TmParallelReduce _ -> false
-  
-  sem pprintCode (indent : Int) (env : PprintEnv) =
-  | TmMap2 t ->
-    match printParen indent env t.f with (env, f) in
-    match pprintCode indent env t.as with (env, as) in
-    match pprintCode indent env t.bs with (env, bs) in
-    (env, join ["parallelMap2 (", f, ") (", as, ") (", bs, ")"])
-  | TmParallelReduce t ->
-    match printParen indent env t.f with (env, f) in
-    match pprintCode indent env t.ne with (env, ne) in
-    match pprintCode indent env t.as with (env, as) in
-    (env, join ["parallelReduce (", f, ") (", ne, ") (", as, ")"])
+  PMExprParallelPattern + MExprANF + PMExprRewrite + PMExprTailRecursion +
+  PMExprPrettyPrint + MExprEq
 end
 
 mexpr
