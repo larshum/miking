@@ -68,7 +68,11 @@ lang PMExprClassify = PMExprAst + PMExprExtractAccelerate + MExprCallGraph
       foldl
         (lam env. lam bind. classifyH env bind.ident bind.body)
         env t.bindings in
-    let g : Digraph Name Int = constructCallGraph (TmRecLets t) in
+    let g : Digraph Name Int =
+      -- NOTE(larshum, 2023-11-27): Use empty bindings as we are not interested
+      -- in bindings within the recursive-let expression.
+      let emptyBinds = map (lam b. {b with body = uunit_}) t.bindings in
+      constructCallGraph (TmRecLets {t with bindings = emptyBinds}) in
     let sccs = digraphTarjan g in
     let env = foldl f env (reverse sccs) in
     classifyH env id t.inexpr
