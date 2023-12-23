@@ -184,7 +184,7 @@ lang PMExprPatternMatch = PMExprAst + PMExprParallelPatterns
         work state 0
       else None ()
     in
-    let matchArgsWithParams : [Expr] -> PatternMatchState -> VarPattern
+    let matchArgsWithParams : use Ast in [Expr] -> PatternMatchState -> VarPattern
                            -> Option Name -> Option PatternMatchState =
       lam args. lam state. lam bindingVar. lam bindingName.
       let n = length args in

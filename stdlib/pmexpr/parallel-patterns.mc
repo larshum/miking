@@ -3,18 +3,15 @@ include "pmexpr/ast.mc"
 include "pmexpr/function-properties.mc"
 include "pmexpr/utils.mc"
 
--- TODO(larshum, 2023-11-27): We'll need to move this alias into the below
--- language fragment AND add type-level use's to get correct behavior, once we
--- get the nominal type-checking working.
-type Pattern = {
-  atomicPatternMap : Map Int AtomicPattern,
-  activePatterns : [Int],
-  dependencies : Map Int (Set Int),
-  replacement : Info -> Map VarPattern (Name, Expr) -> Expr
-}
-
 lang PMExprParallelPatterns =
   PMExprAst + PMExprVariableSub + PMExprFunctionProperties + MExprEq
+
+  type Pattern = {
+    atomicPatternMap : Map Int AtomicPattern,
+    activePatterns : [Int],
+    dependencies : Map Int (Set Int),
+    replacement : Info -> Map VarPattern (Name, Expr) -> Expr
+  }
 
   syn VarPattern =
   | PatternIndex Int
@@ -188,8 +185,8 @@ lang PMExprParallelPatterns =
 end
 
 -- Definition of the map pattern
-let mapPatRef : Ref (Option Pattern) = ref (None ())
-let mapPattern : () -> Pattern = lam.
+let mapPatRef : use PMExprParallelPatterns in Ref (Option Pattern) = ref (None ())
+let mapPattern : use PMExprParallelPatterns in () -> Pattern = lam.
   use PMExprParallelPatterns in
   let s = nameSym "s" in
   let acc = nameSym "acc" in
@@ -265,8 +262,8 @@ let getMapPattern = lam.
     pat
 
 -- Definition of the 'parallelMap2' pattern
-let map2PatRef : Ref (Option Pattern) = ref (None ())
-let map2Pattern : () -> Pattern = lam.
+let map2PatRef : use PMExprParallelPatterns in Ref (Option Pattern) = ref (None ())
+let map2Pattern : use PMExprParallelPatterns in () -> Pattern = lam.
   use PMExprParallelPatterns in
   let s1 = nameSym "s1" in
   let s2 = nameSym "s2" in
@@ -354,8 +351,8 @@ let getMap2Pattern = lam.
     pat
 
 -- Definition of the fold pattern
-let reducePatRef : Ref (Option Pattern) = ref (None ())
-let reducePattern : () -> Pattern = lam.
+let reducePatRef : use PMExprParallelPatterns in Ref (Option Pattern) = ref (None ())
+let reducePattern : use PMExprParallelPatterns in () -> Pattern = lam.
   use PMExprParallelPatterns in
   let s = nameSym "s" in
   let acc = nameSym "acc" in
