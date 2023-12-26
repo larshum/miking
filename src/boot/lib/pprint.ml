@@ -183,6 +183,8 @@ let rec ustring_of_ty = function
       us "(" ^. ustring_of_ty ty1 ^. us "->" ^. ustring_of_ty ty2 ^. us ")"
   | TyAll (_, var, ty) ->
       us "all " ^. pprint_var_str var ^. us ". " ^. ustring_of_ty ty
+  | TyArray (_, ty) ->
+    us "Array[" ^. ustring_of_ty ty ^. us "]"
   | TySeq (_, ty1) -> (
     match ty1 with
     | TyChar _ ->
@@ -376,6 +378,15 @@ let rec print_const fmt = function
       fprintf fmt "char2int"
   | Cint2char ->
       fprintf fmt "int2char"
+  (* MCore intrinsic: mutable arrays *)
+  | CcreateMutArray _ ->
+      fprintf fmt "createMutArray"
+  | CgetMutArray _ ->
+      fprintf fmt "getMutArray"
+  | CsetMutArray _ ->
+      fprintf fmt "setMutArray"
+  | ClengthMutArray ->
+      fprintf fmt "lengthMutArray"
   (* MCore intrinsic: sequences *)
   | Ccreate _ ->
       fprintf fmt "create"
@@ -572,7 +583,7 @@ and print_tm fmt (prec, t) =
         Match
     | TmLam _ ->
         Lam
-    | TmConApp _ | TmSeq _ ->
+    | TmConApp _ | TmArray _ | TmSeq _ ->
         Semicolon
     | TmApp _ ->
         App
@@ -653,6 +664,12 @@ and print_tm' fmt t =
       fprintf fmt "@[<hv 0>%a@ %a@]" print_tm (App, t1) print_tm (App, t2)
   | TmConst (_, c) ->
       print_const fmt c
+  | TmArray (_, tms) -> (
+      if Array.length tms = 0 then fprintf fmt "[| |]"
+      else
+        let print t fmt = fprintf fmt "%a" print_tm (App, t) in
+        let inner = List.map print (Array.to_list tms) in
+        fprintf fmt "[|@[<hov 0>%a@]|]" concat (Comma, inner) )
   | TmSeq (fi, tms) -> (
       if Mseq.length tms = 0 then fprintf fmt "[]"
       else

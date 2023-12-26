@@ -116,6 +116,11 @@ lang ConstCmp = Cmp + ConstAst
   | (TmConst l, TmConst r) -> cmpConst l.val r.val
 end
 
+lang ArrayCmp = Cmp + ArrayAst
+  sem cmpExprH =
+  | (TmArray l, TmArray r) -> cmpMutArray cmpExpr l.tms r.tms
+end
+
 lang SeqCmp = Cmp + SeqAst
   sem cmpExprH =
   | (TmSeq l, TmSeq r) -> seqCmp cmpExpr l.tms r.tms
@@ -384,6 +389,11 @@ lang FunTypeCmp = Cmp + FunTypeAst
     else fromDiff
 end
 
+lang ArrayTypeCmp = Cmp + ArrayTypeAst
+  sem cmpTypeH =
+  | (TyArray {ty = t1}, TyArray {ty = t2}) -> cmpType t1 t2
+end
+
 lang SeqTypeCmp = Cmp + SeqTypeAst
   sem cmpTypeH =
   | (TySeq { ty = t1 }, TySeq { ty = t2 }) -> cmpType t1 t2
@@ -484,7 +494,8 @@ lang MExprCmp =
 
   -- Terms
   VarCmp + AppCmp + LamCmp + RecordCmp + LetCmp + TypeCmp + RecLetsCmp +
-  ConstCmp + DataCmp + MatchCmp + UtestCmp + SeqCmp + NeverCmp + ExtCmp +
+  ConstCmp + DataCmp + MatchCmp + UtestCmp + ArrayCmp + SeqCmp + NeverCmp +
+  ExtCmp +
 
   -- Constants
   IntCmp + FloatCmp + BoolCmp + CharCmp + SymbCmp +
@@ -495,8 +506,9 @@ lang MExprCmp =
 
   -- Types
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
-  FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
-  ConTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp + AliasTypeCmp
+  FunTypeCmp + ArrayTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp +
+  VariantTypeCmp + ConTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp +
+  AliasTypeCmp
 end
 
 lang RepTypesCmp = ReprSubstCmp + ReprTypeCmp + TyWildCmp
@@ -541,6 +553,10 @@ utest cmpExpr (ureclets_ [("a", ulam_ "b" (var_ "a"))])
 
 utest cmpExpr (int_ 0) (int_ 0) with 0 in
 utest cmpExpr (int_ 1) (int_ 0) with 0 using neqi in
+
+utest cmpExpr (array_ [| |]) (array_ [| |]) with 0 in
+utest cmpExpr (array_ [|int_ 1, int_ 2|]) (array_ [|int_ 1|]) with 0 using neqi in
+utest cmpExpr (array_ [|int_ 1, int_ 2|]) (array_ [|int_ 1, int_ 2|]) with 0 in
 
 utest cmpExpr (seq_ []) (seq_ []) with 0 in
 utest cmpExpr (seq_ [int_ 1, int_ 2]) (seq_ [int_ 1]) with 0 using neqi in
@@ -860,6 +876,9 @@ utest cmpType tychar_ tychar_ with 0 in
 utest cmpType (tyarrow_ tybool_ tybool_) (tyarrow_ tybool_ tybool_) with 0 in
 utest cmpType (tyarrow_ tybool_ tyint_) (tyarrow_ tybool_ tybool_) with 0
 using neqi in
+
+utest cmpType (tyarray_ tybool_) (tyarray_ tybool_) with 0 in
+utest cmpType (tyarray_ tybool_) (tyarray_ tyfloat_) with 0 using neqi in
 
 utest cmpType (tyseq_ tybool_) (tyseq_ tybool_) with 0 in
 utest cmpType (tyseq_ tybool_) (tyseq_ tyfloat_) with 0 using neqi in

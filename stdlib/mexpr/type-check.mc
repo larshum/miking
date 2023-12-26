@@ -954,6 +954,15 @@ lang ConstTypeCheck = TypeCheck + MExprConstType
     TmConst {t with ty = ty}
 end
 
+lang ArrayTypeCheck = TypeCheck + ArrayAst
+  sem typeCheckExpr env =
+  | TmArray t ->
+    let elemTy = newpolyvar env.currentLvl t.info in
+    let tms = mapMutArray (typeCheckExpr env) t.tms in
+    iterMutArray (lam tm. unify env [infoTm tm] elemTy (tyTm tm)) tms;
+    TmArray {t with tms = tms, ty = ityarray_ t.info elemTy}
+end
+
 lang SeqTypeCheck = TypeCheck + SeqAst
   sem typeCheckExpr env =
   | TmSeq t ->
@@ -1207,7 +1216,7 @@ lang MExprTypeCheckMost =
   MetaVarTypeGeneralize + VarTypeGeneralize + AllTypeGeneralize +
 
   -- Terms
-  AppTypeCheck + MatchTypeCheck + ConstTypeCheck + SeqTypeCheck +
+  AppTypeCheck + MatchTypeCheck + ConstTypeCheck + ArrayTypeCheck + SeqTypeCheck +
   RecordTypeCheck + TypeTypeCheck + DataTypeCheck + UtestTypeCheck +
   NeverTypeCheck + ExtTypeCheck +
 

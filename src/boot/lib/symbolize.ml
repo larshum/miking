@@ -210,6 +210,8 @@ let rec symbolize (env : sym_env) (t : tm) =
         , symbolize env2 tm )
   | TmApp (fi, t1, t2) ->
       TmApp (fi, symbolize env t1, symbolize env t2)
+  | TmArray (fi, tms) ->
+      TmArray (fi, Array.map (symbolize env) tms)
   | TmSeq (fi, tms) ->
       TmSeq (fi, Mseq.map (symbolize env) tms)
   | TmRecord (fi, r) ->
@@ -303,6 +305,7 @@ let rec symbolize_toplevel (env : sym_env) = function
     | TmApp _
     | TmType _
     | TmConst _
+    | TmArray _
     | TmSeq _
     | TmRecord _
     | TmRecordUpdate _

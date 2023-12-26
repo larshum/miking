@@ -237,6 +237,10 @@ lang BootParser = MExprAst + ConstTransformer
            ty = TyUnknown { info = ginfo t 0 },
            inexpr = gterm t 0,
            info = ginfo t 0}
+  | 116 /-TmArray-/ ->
+    TmArray {tms = createMutArray (glistlen t 0) (lam n. gterm t n),
+             ty = TyUnknown {info = ginfo t 0},
+             info = ginfo t 0}
 
   -- Get type help function
   sem gtype(t:Unknown) =
@@ -290,7 +294,8 @@ lang BootParser = MExprAst + ConstTransformer
            ident = gname t 0,
            ty = gtype t 0,
            kind = Poly ()}
-
+   | 214 /-TyArray-/ ->
+    TyArray {info = ginfo t 0, ty = gtype t 0}
 
   -- Get constant help function
   sem gconst(t:Unknown) =

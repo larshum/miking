@@ -9,6 +9,7 @@ let tyref_ = lam a. tyapp_ (tycon_ "Ref") a
 let tymap_ = lam k. lam v. tyapp_ (tyapp_ (tycon_ "Map") k) v
 let tybootparsetree_ = tycon_ "BootParseTree"
 
+let tyvararray_ = lam id. tyarray_ (tyvar_ id)
 let tyvarseq_ = lam id. tyseq_ (tyvar_ id)
 
 lang TyConst
@@ -110,6 +111,17 @@ end
 lang CmpSymbTypeAst = TyConst + CmpSymbAst
   sem tyConst =
   | CEqsym _ -> tyarrows_ [tysym_, tysym_, tybool_]
+end
+
+lang ArrayOpTypeAst = TyConst + ArrayOpAst
+  sem tyConst =
+  | CCreateMutArray _ ->
+    tyall_ "a" (tyarrows_ [tyint_, tyarrow_ tyint_ (tyvar_ "a"), tyvararray_ "a"])
+  | CGetMutArray _ ->
+    tyall_ "a" (tyarrows_ [tyvararray_ "a", tyint_, tyvar_ "a"])
+  | CSetMutArray _ ->
+    tyall_ "a" (tyarrows_ [ tyvararray_ "a", tyint_, tyvar_ "a", tyunit_])
+  | CLengthMutArray _ -> tyall_ "a" (tyarrow_ (tyvararray_ "a") tyint_)
 end
 
 lang SeqOpTypeAst = TyConst + SeqOpAst
@@ -262,8 +274,9 @@ end
 lang MExprConstType =
   LiteralTypeAst + ArithIntTypeAst + ShiftIntTypeAst + ArithFloatTypeAst +
   CmpIntTypeAst + IntCharConversionTypeAst + CmpFloatTypeAst + CmpCharTypeAst +
-  SymbTypeAst + CmpSymbTypeAst + SeqOpTypeAst + FileOpTypeAst + IOTypeAst +
-  RandomNumberGeneratorTypeAst + SysTypeAst + FloatIntConversionTypeAst +
-  FloatStringConversionTypeAst + TimeTypeAst + RefOpTypeAst + ConTagTypeAst +
-  TensorOpTypeAst + BootParserTypeAst + UnsafeCoerceTypeAst
+  SymbTypeAst + CmpSymbTypeAst + ArrayOpTypeAst + SeqOpTypeAst +
+  FileOpTypeAst + IOTypeAst + RandomNumberGeneratorTypeAst + SysTypeAst +
+  FloatIntConversionTypeAst + FloatStringConversionTypeAst + TimeTypeAst +
+  RefOpTypeAst + ConTagTypeAst + TensorOpTypeAst + BootParserTypeAst +
+  UnsafeCoerceTypeAst
 end

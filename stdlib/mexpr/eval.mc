@@ -266,6 +266,12 @@ lang UtestEval = Eval + Eq + AppEval + UtestAst + BoolAst + SeqAst
     eval ctx r.next
 end
 
+lang ArrayEval = Eval + ArrayAst
+  sem eval ctx =
+  | TmArray t ->
+    TmArray {t with tms = mapMutArray (eval ctx) t.tms}
+end
+
 lang SeqEval = Eval + SeqAst
   sem eval ctx =
   | TmSeq s ->
@@ -472,6 +478,22 @@ lang CmpSymbEval = CmpSymbAst + ConstEvalNoDefault + CmpSymbArity
   sem delta info =
   | (CEqsym _, [TmConst {val = CSymb s1}, TmConst (t & {val = CSymb s2})]) ->
     TmConst {t with val = CBool {val = eqsym s1.val s2.val}}
+end
+
+lang ArrayOpEval =
+  ArrayOpAst + IntAst + BoolAst + ConstEvalNoDefault + ArrayOpArity
+
+  sem delta info =
+  | (CCreateMutArray _, [TmConst {val = CInt n}, f]) ->
+    let f = lam i. apply (evalCtxEmpty ()) info (f, int_ i) in
+    TmArray {tms = createMutArray n.val f, ty = tyunknown_, info = NoInfo ()}
+  | (CGetMutArray _, [TmArray a, TmConst {val = CInt n}]) ->
+    getMutArray a.tms n.val
+  | (CSetMutArray _, [TmArray a, TmConst {val = CInt n}, val]) ->
+    setMutArray a.tms n.val val;
+    uunit_
+  | (CLengthMutArray _, [TmArray a]) ->
+    TmConst {val = CInt {val = lengthMutArray a.tms}, ty = tyunknown_, info = NoInfo ()}
 end
 
 lang SeqOpEvalFirstOrder =
@@ -1222,13 +1244,13 @@ lang MExprEval =
 
   -- Terms
   VarEval + AppEval + LamEval + RecordEval + RecLetsEval +
-  ConstEval + TypeEval + DataEval + MatchEval + UtestEval + SeqEval +
-  NeverEval + RefEval + ExtEval
+  ConstEval + TypeEval + DataEval + MatchEval + UtestEval + ArrayEval +
+  SeqEval + NeverEval + RefEval + ExtEval
 
   -- Constants
   + ArithIntEval + ShiftIntEval + ArithFloatEval + CmpIntEval + CmpFloatEval +
-  SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
-  RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
+  SymbEval + CmpSymbEval + ArrayOpEval + SeqOpEval + FileOpEval + IOEval +
+  SysEval + RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
   IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
   ConTagEval + TensorOpEval + BootParserEval + UnsafeCoerceEval
 
@@ -1455,6 +1477,23 @@ with int_ 2 using eqExpr in
 utest eval (appSeq_ (ulam_ "x" (ulam_ "x" (addi_ (var_ "x") (int_ 1))))
                    [int_ 1, int_ 2])
 with int_ 3 using eqExpr in
+
+-- Builtin array functions
+let createArray = createMutArray_ (int_ 3) (ulam_ "x" (var_ "x")) in
+utest eval createArray with array_ [|int_ 0, int_ 1, int_ 2|] using eqExpr in
+
+let getArray = getMutArray_ (array_ [|int_ 1, int_ 2, int_ 3|]) (int_ 1) in
+utest eval getArray with int_ 2 using eqExpr in
+
+let setArray = bindall_ [
+  ulet_ "a" (array_ [|int_ 1, int_ 2, int_ 3|]),
+  ulet_ "" (setMutArray_ (var_ "a") (int_ 1) (int_ 4)),
+  var_ "a"
+] in
+utest eval setArray with array_ [|int_ 1, int_ 4, int_ 3|] using eqExpr in
+
+let lengthArray = lengthMutArray_ (array_ [|int_ 1, int_ 2, int_ 3|]) in
+utest eval lengthArray with int_ 3 using eqExpr in
 
 -- Builtin sequence functions
 -- get [1,2,3] 1 -> 2

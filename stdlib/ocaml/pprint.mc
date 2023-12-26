@@ -67,8 +67,8 @@ let noSymConPrefix = "N"
 -- will be printed as Obj.t.
 lang OCamlTypePrettyPrint =
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
-  SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst + AppTypeAst +
-  FunTypePrettyPrint + OCamlTypeAst + IdentifierPrettyPrint
+  ArrayTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst +
+  AppTypeAst + FunTypePrettyPrint + OCamlTypeAst + IdentifierPrettyPrint
 
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   | (TyRecord t) & ty ->
@@ -95,7 +95,7 @@ lang OCamlTypePrettyPrint =
 end
 
 lang OCamlPrettyPrint =
-  ConstPrettyPrint + OCamlAst +
+  ConstPrettyPrint + OCamlAst + ArrayPrettyPrint +
   IdentifierPrettyPrint + NamedPatPrettyPrint + IntPatPrettyPrint +
   CharPatPrettyPrint + BoolPatPrettyPrint + OCamlTypePrettyPrint +
   AppPrettyPrint + MExprAst-- TODO(vipa, 2021-05-12): should MExprAst be here? It wasn't before, but some of the copied constants aren't in the others
@@ -229,6 +229,10 @@ lang OCamlPrettyPrint =
   | CStringIsFloat _ -> intrinsicOpFloat "string_is_float"
   | CString2float _ -> intrinsicOpFloat "string2float"
   | CFloat2string _ -> intrinsicOpFloat "float2string"
+  | CCreateMutArray _ -> "Array.init"
+  | CGetMutArray _ -> "Array.unsafe_get"
+  | CSetMutArray _ -> "Array.unsafe_set"
+  | CLengthMutArray _ -> "Array.length"
   | CCreate _ -> intrinsicOpSeq "create"
   | CCreateList _ -> intrinsicOpSeq "create_list"
   | CCreateRope _ -> intrinsicOpSeq "create_rope"

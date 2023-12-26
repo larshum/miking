@@ -45,6 +45,11 @@ let builtin = use MExprAst in
   , ("eqc", CEqc ())
   , ("char2int", CChar2Int ())
   , ("int2char", CInt2Char ())
+  -- Mutable arrays
+  , ("createMutArray", CCreateMutArray ())
+  , ("getMutArray", CGetMutArray ())
+  , ("setMutArray", CSetMutArray ())
+  , ("lengthMutArray", CLengthMutArray ())
   -- Sequences
   , ("create", CCreate ())
   , ("createList", CCreateList ())

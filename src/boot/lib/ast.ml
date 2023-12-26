@@ -127,6 +127,11 @@ and const =
   | Ceqc of int option
   | Cchar2int
   | Cint2char
+  (* MCore intrinsic: mutable arrays *)
+  | CcreateMutArray of int option
+  | CgetMutArray of tm array option
+  | CsetMutArray of tm array option * int option
+  | ClengthMutArray
   (* MCore intrinsic: sequences *)
   | Ccreate of int option
   | CcreateList of int option
@@ -292,6 +297,8 @@ and tm =
   | TmRecLets of info * (info * ustring * Symb.t * ty * tm) list * tm
   (* Constant *)
   | TmConst of info * const
+  (* Array *)
+  | TmArray of info * tm array
   (* Sequence *)
   | TmSeq of info * tm Mseq.t
   (* Record *)
@@ -379,6 +386,8 @@ and ty =
   | TyArrow of info * ty * ty
   (* Forall quantifier *)
   | TyAll of info * ustring * ty
+  (* Array type *)
+  | TyArray of info * ty
   (* Sequence type *)
   | TySeq of info * ty
   (* Tensor type *)
@@ -431,6 +440,9 @@ let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
         acc lst
       |> fun (acc, lst') ->
       f acc t |> fun (acc, t') -> (acc, TmRecLets (fi, lst', t'))
+  | TmArray (fi, ta) ->
+      let acc, ta' = Array.fold_left_map f acc ta in
+      (acc, TmArray (fi, ta'))
   | TmSeq (fi, ts) ->
       let acc, ts' = Mseq.Helpers.map_accum_left f acc ts in
       (acc, TmSeq (fi, ts'))
@@ -515,6 +527,7 @@ let smap_accum_left_tm_ty (f : 'a -> ty -> 'a * ty) (acc : 'a) : tm -> 'a * tm
   | ( TmVar _
     | TmApp _
     | TmConst _
+    | TmArray _
     | TmSeq _
     | TmRecord _
     | TmRecordUpdate _
@@ -540,6 +553,9 @@ let smap_accum_left_ty_ty (f : 'a -> ty -> 'a * ty) (acc : 'a) : ty -> 'a * ty
   | TyAll (fi, id, ty) ->
       let acc, ty = f acc ty in
       (acc, TyAll (fi, id, ty))
+  | TyArray (fi, ty) ->
+      let acc, ty = f acc ty in
+      (acc, TyArray (fi, ty))
   | TySeq (fi, ty) ->
       let acc, ty = f acc ty in
       (acc, TySeq (fi, ty))
@@ -672,6 +688,7 @@ let tm_info = function
   | TmLet (fi, _, _, _, _, _)
   | TmRecLets (fi, _, _)
   | TmConst (fi, _)
+  | TmArray (fi, _)
   | TmSeq (fi, _)
   | TmRecord (fi, _)
   | TmRecordUpdate (fi, _, _, _)
@@ -713,6 +730,7 @@ let ty_info = function
   | TyChar fi
   | TyArrow (fi, _, _)
   | TyAll (fi, _, _)
+  | TyArray (fi, _)
   | TySeq (fi, _)
   | TyTensor (fi, _)
   | TyRecord (fi, _)
@@ -770,6 +788,13 @@ let const_has_side_effect = function
   (* MCore intrinsics: Characters *)
   | CChar _ | Ceqc _ | Cchar2int | Cint2char ->
       false
+  (* MCore intrinsic: mutable arrays *)
+  | CcreateMutArray _
+  | CgetMutArray _
+  | ClengthMutArray ->
+      false
+  | CsetMutArray _ ->
+      true
   (* MCore intrinsic: sequences *)
   | Ccreate _
   | CcreateList _

@@ -716,6 +716,7 @@ let rec translate_tm (env : mlang_env) : tm -> tm = function
         , translate_tm env el )
   | ( TmApp _
     | TmConst _
+    | TmArray _
     | TmSeq _
     | TmRecord _
     | TmRecordUpdate _

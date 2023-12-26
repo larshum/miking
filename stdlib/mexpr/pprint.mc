@@ -622,6 +622,19 @@ lang UtestPrettyPrint = PrettyPrint + UtestAst
                "in", pprintNewline indent, next])
 end
 
+lang ArrayPrettyPrint = PrettyPrint + ArrayAst + ConstPrettyPrint
+  sem isAtomic =
+  | TmArray _ -> true
+
+  sem pprintCode indent env =
+  | TmArray t ->
+    match mapAccumLMutArray (pprintCode (pprintIncr indent)) env t.tms
+    with (env, tms) in
+    let s = create (lengthMutArray tms) (lam i. getMutArray tms i) in
+    let merged = strJoin (concat "," (pprintNewline (pprintIncr indent))) s in
+    (env, join ["[| ", merged, " |]"])
+end
+
 lang SeqPrettyPrint = PrettyPrint + SeqAst + ConstPrettyPrint + CharAst
   sem isAtomic =
   | TmSeq _ -> true
@@ -772,6 +785,14 @@ end
 lang CmpSymbPrettyPrint = CmpSymbAst + ConstPrettyPrint
    sem getConstStringCode (indent : Int) =
    | CEqsym _ -> "eqsym"
+end
+
+lang ArrayOpPrettyPrint = ArrayOpAst + ConstPrettyPrint
+  sem getConstStringCode indent =
+  | CCreateMutArray _ -> "createMutArray"
+  | CGetMutArray _ -> "getMutArray"
+  | CSetMutArray _ -> "setMutArray"
+  | CLengthMutArray _ -> "lengthMutArray"
 end
 
 lang SeqOpPrettyPrint = SeqOpAst + ConstPrettyPrint + CharAst
@@ -1085,6 +1106,13 @@ lang FunTypePrettyPrint = PrettyPrint + FunTypeAst
     (env, join [from, " -> ", to])
 end
 
+lang ArrayTypePrettyPrint = PrettyPrint + ArrayTypeAst
+  sem getTypeStringCode indent env =
+  | TyArray t ->
+    match getTypeStringCode indent env t.ty with (env, ty) in
+    (env, join ["Array[", ty, "]"])
+end
+
 lang SeqTypePrettyPrint = PrettyPrint + SeqTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TySeq t ->
@@ -1311,8 +1339,8 @@ lang MExprPrettyPrint =
   -- Terms
   VarPrettyPrint + AppPrettyPrint + LamPrettyPrint + RecordPrettyPrint +
   LetPrettyPrint + TypePrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint +
-  DataPrettyPrint + MatchPrettyPrint + UtestPrettyPrint + SeqPrettyPrint +
-  NeverPrettyPrint + ExtPrettyPrint +
+  DataPrettyPrint + MatchPrettyPrint + UtestPrettyPrint + ArrayPrettyPrint +
+  SeqPrettyPrint + NeverPrettyPrint + ExtPrettyPrint +
 
   -- Constants
   IntPrettyPrint + ArithIntPrettyPrint + ShiftIntPrettyPrint +
@@ -1320,7 +1348,7 @@ lang MExprPrettyPrint =
   BoolPrettyPrint + CmpIntPrettyPrint + CmpFloatPrettyPrint + CharPrettyPrint +
   CmpCharPrettyPrint + IntCharConversionPrettyPrint +
   FloatStringConversionPrettyPrint + SymbPrettyPrint + CmpSymbPrettyPrint +
-  SeqOpPrettyPrint + FileOpPrettyPrint + IOPrettyPrint +
+  ArrayOpPrettyPrint + SeqOpPrettyPrint + FileOpPrettyPrint + IOPrettyPrint +
   RandomNumberGeneratorPrettyPrint + SysPrettyPrint + TimePrettyPrint +
   ConTagPrettyPrint + RefOpPrettyPrint + TensorOpPrettyPrint +
   BootParserPrettyPrint + UnsafeCoercePrettyPrint +
@@ -1334,8 +1362,8 @@ lang MExprPrettyPrint =
   -- Types
   UnknownTypePrettyPrint + BoolTypePrettyPrint + IntTypePrettyPrint +
   FloatTypePrettyPrint + CharTypePrettyPrint + FunTypePrettyPrint +
-  SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
-  ConTypePrettyPrint + VarTypePrettyPrint +
+  ArrayTypePrettyPrint + SeqTypePrettyPrint + RecordTypePrettyPrint +
+  VariantTypePrettyPrint + ConTypePrettyPrint + VarTypePrettyPrint +
   AppTypePrettyPrint + TensorTypePrettyPrint + AllTypePrettyPrint +
   AliasTypePrettyPrint
 

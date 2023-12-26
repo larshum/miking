@@ -166,6 +166,12 @@ lang CharTypeUnify = Unify + CharTypeAst
   | (TyChar _, TyChar _) -> u.empty
 end
 
+lang ArrayTypeUnify = Unify + ArrayTypeAst
+  sem unifyBase u env =
+  | (TyArray t1, TyArray t2) ->
+    unifyTypes u env (t1.ty, t2.ty)
+end
+
 lang SeqTypeUnify = Unify + SeqTypeAst
   sem unifyBase u env =
   | (TySeq t1, TySeq t2) ->
@@ -637,7 +643,7 @@ end
 lang MExprUnify =
   VarTypeUnify + MetaVarTypeUnify + FunTypeUnify + AppTypeUnify + AllTypeUnify +
   ConTypeUnify + BoolTypeUnify + IntTypeUnify + FloatTypeUnify + CharTypeUnify +
-  SeqTypeUnify + TensorTypeUnify + RecordTypeUnify
+  ArrayTypeUnify + SeqTypeUnify + TensorTypeUnify + RecordTypeUnify
 end
 
 lang RepTypesUnify = TyWildUnify + ReprTypeUnify

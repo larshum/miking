@@ -33,8 +33,8 @@ let _utestRuntimeLoc = "/mexpr/utest-runtime.mc"
 
 let _utestRuntimeExpected = [
   "utestRunner", "utestDefaultOnFail", "utestExitOnFailure", "defaultPprint",
-  "ppBool", "ppInt", "ppFloat", "ppChar", "ppSeq", "eqBool", "eqInt",
-  "eqFloat", "eqChar", "eqSeq", "join"
+  "ppBool", "ppInt", "ppFloat", "ppChar", "ppArray", "ppSeq", "eqBool",
+  "eqInt", "eqFloat", "eqChar", "eqArray", "eqSeq", "join"
 ]
 let _utestRuntimeCode = ref (None ())
 let _utestRuntimeIds = ref (None ())
@@ -50,6 +50,10 @@ let newRecordEqualityName = lam.
   let idx = deref _eqId in
   nameSym (concat "eqRecord" (int2string idx))
 
+let _ppArrayName = nameSym "ppArray"
+let _ppArrayTyVarName = nameSym "a"
+let _eqArrayName = nameSym "eqArray"
+let _eqArrayTyVarName = nameSym "a"
 let _ppSeqName = nameSym "ppSeq"
 let _ppSeqTyVarName = nameSym "a"
 let _eqSeqName = nameSym "eqSeq"
@@ -74,6 +78,9 @@ let _boolTy = use MExprAst in TyBool {info = _utestInfo}
 let _intTy = use MExprAst in TyInt {info = _utestInfo}
 let _charTy = use MExprAst in TyChar {info = _utestInfo}
 let _floatTy = use MExprAst in TyFloat {info = _utestInfo}
+let _arrayTy = lam ty.
+  use MExprAst in
+  TyArray {ty = ty, info = _utestInfo}
 let _seqTy = lam ty.
   use MExprAst in
   TySeq {ty = ty, info = _utestInfo}
@@ -109,13 +116,13 @@ let _tyalls = lam vars. lam ty.
     ty vars
 recursive let _pprintTy = lam ty.
   use MExprAst in
-  match ty with TySeq {ty = elemTy} | TyTensor {ty = elemTy} then
+  match ty with TyArray {ty = elemTy} | TySeq {ty = elemTy} | TyTensor {ty = elemTy} then
     _tyarrows [_tyarrows [elemTy, _stringTy], ty, _stringTy]
   else _tyarrows [ty, _stringTy]
 end
 recursive let _eqTy = lam ty.
   use MExprAst in
-  match ty with TySeq {ty = elemTy} | TyTensor {ty = elemTy} then
+  match ty with TyArray {ty = elemTy} | TySeq {ty = elemTy} | TyTensor {ty = elemTy} then
     _tyarrows [_tyarrows [elemTy, elemTy, _boolTy], ty, ty, _boolTy]
   else _tyarrows [ty, ty, _boolTy]
 end
@@ -218,13 +225,15 @@ let _concat =
 lang UtestBase =
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + RecordTypeCmp + VariantTypeCmp + ConTypeCmp + VarTypeCmp +
-  AppTypeCmp + AllTypeCmp + SeqTypeAst + TensorTypeAst + TypeCheck
+  AppTypeCmp + AllTypeCmp + ArrayTypeAst + SeqTypeAst + TensorTypeAst +
+  TypeCheck
 
   -- NOTE(larshum, 2022-12-26): We customize the comparison of types such that
   -- all sequence and tensor types are considered equal. This is because we
-  -- reuse the polymorphic functions for printing and equality for all sequence
-  -- and tensor types.
+  -- reuse the polymorphic functions for printing and equality for all
+  -- sequence, tensor, and array types.
   sem cmpTypeH =
+  | (TyArray _, TyArray _) -> 0
   | (TySeq _, TySeq _) -> 0
   | (TyTensor _, TyTensor _) -> 0
 
@@ -272,7 +281,7 @@ lang UtestBase =
 
   sem shallowInnerTypesH : UtestEnv -> Type -> [Type]
   sem shallowInnerTypesH env =
-  | TySeq {ty = elemTy} | TyTensor {ty = elemTy} -> [elemTy]
+  | TyArray {ty = elemTy} | TySeq {ty = elemTy} | TyTensor {ty = elemTy} -> [elemTy]
   | TyRecord {fields = fields} -> mapValues fields
   | (TyApp _ | TyCon _) & ty ->
     match collectTypeArguments [] ty with (id, tyArgs) in
@@ -293,7 +302,7 @@ lang UtestBase =
 
   sem getPrettyPrintExprH : Info -> UtestEnv -> Type -> (UtestEnv, Expr)
   sem getPrettyPrintExprH info env =
-  | (TySeq {ty = elemTy} | TyTensor {ty = elemTy}) & ty ->
+  | (TyArray {ty = elemTy} | TySeq {ty = elemTy} | TyTensor {ty = elemTy}) & ty ->
     match prettyPrintId info env ty with (env, pprintId) in
     match getPrettyPrintExprH info env elemTy with (env, ppElem) in
     (env, _apps (_var pprintId (_pprintTy ty)) [ppElem])
@@ -316,7 +325,7 @@ lang UtestBase =
 
   sem getEqualityExprH : Info -> UtestEnv -> Type -> (UtestEnv, Expr)
   sem getEqualityExprH info env =
-  | (TySeq {ty = elemTy} | TyTensor {ty = elemTy}) & ty ->
+  | (TyArray {ty = elemTy} | TySeq {ty = elemTy} | TyTensor {ty = elemTy}) & ty ->
     match equalityId info env ty with (env, eqId) in
     match getEqualityExprH info env elemTy with (env, elemEq) in
     (env, _apps (_var eqId (_eqTy ty)) [elemEq])
@@ -424,33 +433,41 @@ lang UtestRuntime = MExprLoadRuntime + MExprFindSym
   sem ppCharName =
   | _ -> get (findRuntimeIds ()) 7
 
+  sem ppArrayName : () -> Name
+  sem ppArrayName =
+  | _ -> get (findRuntimeIds ()) 8
+
   sem ppSeqName : () -> Name
   sem ppSeqName =
-  | _ -> get (findRuntimeIds ()) 8
+  | _ -> get (findRuntimeIds ()) 9
 
   sem eqBoolName : () -> Name
   sem eqBoolName =
-  | _ -> get (findRuntimeIds ()) 9
+  | _ -> get (findRuntimeIds ()) 10
 
   sem eqIntName : () -> Name
   sem eqIntName =
-  | _ -> get (findRuntimeIds ()) 10
+  | _ -> get (findRuntimeIds ()) 11
 
   sem eqFloatName : () -> Name
   sem eqFloatName =
-  | _ -> get (findRuntimeIds ()) 11
+  | _ -> get (findRuntimeIds ()) 12
 
   sem eqCharName : () -> Name
   sem eqCharName =
-  | _ -> get (findRuntimeIds ()) 12
+  | _ -> get (findRuntimeIds ()) 13
+
+  sem eqArrayName : () -> Name
+  sem eqArrayName =
+  | _ -> get (findRuntimeIds ()) 14
 
   sem eqSeqName : () -> Name
   sem eqSeqName =
-  | _ -> get (findRuntimeIds ()) 13
+  | _ -> get (findRuntimeIds ()) 15
 
   sem joinName : () -> Name
   sem joinName =
-  | _ -> get (findRuntimeIds ()) 14
+  | _ -> get (findRuntimeIds ()) 16
 end
 
 lang GeneratePrettyPrintBase = UtestBase + UtestRuntime + MExprAst
@@ -496,6 +513,21 @@ end
 lang CharPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
   sem prettyPrintIdH info env =
   | TyChar _ -> ppCharName ()
+end
+
+lang ArrayPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
+  sem prettyPrintIdH info env =
+  | TyArray _ -> _ppArrayName
+
+  sem generatePrettyPrintBodyH info env =
+  | TyArray t ->
+    let ppElem = nameSym "ppElem" in
+    let target = nameSym "a" in
+    let elemTy = _varTy _ppArrayTyVarName in
+    let ty = TyArray {t with ty = elemTy} in
+    let ppArray = _var (ppArrayName ()) (_pprintTy (_arrayTy elemTy)) in
+    _lam ppElem (_pprintTy elemTy) (_lam target ty
+      (_apps ppArray [_var ppElem (_pprintTy elemTy), _var target ty]))
 end
 
 lang SeqPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
@@ -639,7 +671,8 @@ end
 
 lang MExprGeneratePrettyPrint =
   BoolPrettyPrint + IntPrettyPrint + FloatPrettyPrint + CharPrettyPrint +
-  SeqPrettyPrint + TensorPrettyPrint + RecordPrettyPrint + VariantPrettyPrint
+  ArrayPrettyPrint + SeqPrettyPrint + TensorPrettyPrint + RecordPrettyPrint +
+  VariantPrettyPrint
 end
 
 lang GenerateEqualityBase = UtestBase + MExprAst + PrettyPrint
@@ -703,6 +736,22 @@ lang CharEquality = GenerateEqualityBase + UtestRuntime
 
   sem generateEqualityBodyH info env =
   | TyChar _ -> _unit
+end
+
+lang ArrayEquality = GenerateEqualityBase + UtestRuntime
+  sem equalityIdH info env =
+  | TyArray _ -> _eqArrayName
+
+  sem generateEqualityBodyH info env =
+  | TyArray t ->
+    let eqElem = nameSym "eqElem" in
+    let larg = nameSym "l" in
+    let rarg = nameSym "r" in
+    let elemTy = _varTy _eqArrayTyVarName in
+    let ty = TyArray {t with ty = elemTy} in
+    let eqArray = _var (eqArrayName ()) (_eqTy (_arrayTy elemTy)) in
+    _lam eqElem (_eqTy elemTy) (_lam larg ty (_lam rarg ty
+      (_apps eqArray [_var eqElem (_eqTy elemTy), _var larg ty, _var rarg ty])))
 end
 
 lang SeqEquality = GenerateEqualityBase + UtestRuntime
@@ -820,8 +869,8 @@ lang VariantEquality = GenerateEqualityBase + UtestRuntime
 end
 
 lang MExprGenerateEquality =
-  BoolEquality + IntEquality + FloatEquality + CharEquality + SeqEquality +
-  TensorEquality + RecordEquality + VariantEquality
+  BoolEquality + IntEquality + FloatEquality + CharEquality + ArrayEquality +
+  SeqEquality + TensorEquality + RecordEquality + VariantEquality
 end
 
 -- The main utest generation language fragment. Here, we define functions for
@@ -849,19 +898,21 @@ lang MExprUtestGenerate =
   sem generatePrettyPrintBindingsH : Info -> UtestEnv -> Type
                                   -> (UtestEnv, [RecLetBinding])
   sem generatePrettyPrintBindingsH info env =
-  | (TySeq {ty = elemTy} | TyTensor {ty = elemTy}) & ty ->
+  | (TyArray {ty = elemTy} | TySeq {ty = elemTy} | TyTensor {ty = elemTy}) & ty ->
     if setMem ty env.pprintDef then
       generatePrettyPrintBindingsH info env elemTy
     else
       match generatePrettyPrintBody info env ty with (id, body) in
       match generatePrettyPrintBindingsH info env elemTy with (env, binds) in
       let varId =
-        match ty with TySeq _ then _ppSeqTyVarName
+        match ty with TyArray _ then _ppArrayTyVarName
+        else match ty with TySeq _ then _ppSeqTyVarName
         else _ppTensorTyVarName
       in
       let ty =
         let elemTy = _varTy varId in
         switch ty
+        case TyArray t then TyArray {t with ty = elemTy}
         case TySeq t then TySeq {t with ty = elemTy}
         case TyTensor t then TyTensor {t with ty = elemTy}
         end
@@ -896,19 +947,21 @@ lang MExprUtestGenerate =
   sem generateEqualityBindingsH : Info -> UtestEnv -> Type
                                -> (UtestEnv, [RecLetBinding])
   sem generateEqualityBindingsH info env =
-  | (TySeq {ty = elemTy} | TyTensor {ty = elemTy}) & ty ->
+  | (TyArray {ty = elemTy} | TySeq {ty = elemTy} | TyTensor {ty = elemTy}) & ty ->
     if setMem ty env.eqDef then
       generateEqualityBindingsH info env elemTy
     else
       match generateEqualityBody info env ty with (id, body) in
       match generateEqualityBindingsH info env elemTy with (env, binds) in
       let varId =
-        match ty with TySeq _ then _eqSeqTyVarName
+        match ty with TyArray _ then _eqArrayTyVarName
+        else match ty with TySeq _ then _eqSeqTyVarName
         else _eqTensorTyVarName
       in
       let ty =
         let elemTy = _varTy varId in
         switch ty
+        case TyArray t then TyArray {t with ty = elemTy}
         case TySeq t then TySeq {t with ty = elemTy}
         case TyTensor t then TyTensor {t with ty = elemTy}
         end
@@ -1127,6 +1180,18 @@ utest evalPrettyPrint emptyEnv tyfloat_ f1 with str_ "2.5" using eqExpr in
 utest evalPrettyPrint emptyEnv tyfloat_ f2 with str_ "2.6" using eqExpr in
 utest evalEquality emptyEnv tyfloat_ f1 f2 with false_ using eqExpr in
 utest evalEquality emptyEnv tyfloat_ f1 f1 with true_ using eqExpr in
+
+let ty = tyarray_ tyint_ in
+let a1 = TmArray {tms = [|i1, i2|], ty = ty, info = NoInfo ()} in
+let a2 = TmArray {tms = [|i1, i2, i1|], ty = ty, info = NoInfo ()} in
+let a3 = TmArray {tms = [| |], ty = ty, info = NoInfo ()} in
+utest evalPrettyPrint emptyEnv ty a1 with str_ "[|1,2|]" using eqExpr in
+--utest evalPrettyPrint emptyEnv ty a2 with str_ "[|1,2,1|]" using eqExpr in
+--utest evalPrettyPrint emptyEnv ty a3 with str_ "[||]" using eqExpr in
+--utest evalEquality emptyEnv ty a3 a3 with true_ using eqExpr in
+--utest evalEquality emptyEnv ty a1 a2 with false_ using eqExpr in
+--utest evalEquality emptyEnv ty a2 a1 with false_ using eqExpr in
+--utest evalEquality emptyEnv ty a1 a1 with true_ using eqExpr in
 
 let ty = tyseq_ tyint_ in
 let s1 = TmSeq {tms = [i1, i2], ty = ty, info = NoInfo ()} in

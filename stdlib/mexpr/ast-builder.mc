@@ -32,6 +32,14 @@ let ityunknown_ = use UnknownTypeAst in
   lam i: Info.
   TyUnknown {info = i}
 
+let ityarray_ = use ArrayTypeAst in
+  lam info. lam ty.
+  TyArray {ty = ty, info = info}
+
+let tyarray_ = use ArrayTypeAst in
+  lam ty.
+  ityarray_ (NoInfo ()) ty
+
 let ityseq_ = use SeqTypeAst in
   lam info. lam ty.
   TySeq {ty = ty, info = info}
@@ -543,6 +551,10 @@ let match_ = use MExprAst in
   TmMatch {target = target, pat = pat, thn = thn, els = els,
            ty = tyunknown_, info = NoInfo ()}
 
+let array_ = use MExprAst in
+  lam tms.
+  TmArray {tms = tms, ty = tyunknown_, info = NoInfo ()}
+
 let seq_ = use MExprAst in
   lam tms.
   TmSeq {tms = tms, ty = tyunknown_, info = NoInfo ()}
@@ -924,6 +936,22 @@ let srli_ = use MExprAst in
 let srai_ = use MExprAst in
   lam a. lam b.
   appf2_ (uconst_ (CSrai ())) a b
+
+let createMutArray_ = use MExprAst in
+  lam n. lam f.
+  appf2_ (uconst_ (CCreateMutArray ())) n f
+
+let getMutArray_ = use MExprAst in
+  lam a. lam i.
+  appf2_ (uconst_ (CGetMutArray ())) a i
+
+let setMutArray_ = use MExprAst in
+  lam a. lam i. lam v.
+  appf3_ (uconst_ (CSetMutArray ())) a i v
+
+let lengthMutArray_ = use MExprAst in
+  lam a.
+  app_ (uconst_ (CLengthMutArray ())) a
 
 let get_ = use MExprAst in
   lam s. lam i.

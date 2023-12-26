@@ -113,6 +113,14 @@ lang CmpSymbArity = ConstArity + CmpSymbAst
   | CEqsym _ -> 2
 end
 
+lang ArrayOpArity = ConstArity + ArrayOpAst
+  sem constArity =
+  | CCreateMutArray _ -> 2
+  | CGetMutArray _ -> 2
+  | CSetMutArray _ -> 3
+  | CLengthMutArray _ -> 1
+end
+
 lang SeqOpArity = ConstArity + SeqOpAst
   sem constArity =
   | CSet _ -> 3

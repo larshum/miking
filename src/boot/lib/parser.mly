@@ -87,6 +87,7 @@
 %token <unit Ast.tokendata> TCHAR
 %token <unit Ast.tokendata> TSTRING
 %token <unit Ast.tokendata> TTENSOR
+%token <unit Ast.tokendata> TARRAY
 
 %token <unit Ast.tokendata> EQ            /* "="   */
 %token <unit Ast.tokendata> ARROW         /* "->"  */
@@ -441,6 +442,8 @@ atom:
                                                   (Mseq.Helpers.of_ustring $1.v)) }
   | LSQUARE seq RSQUARE  { TmSeq(mkinfo $1.i $3.i, Mseq.Helpers.of_list $2) }
   | LSQUARE RSQUARE      { TmSeq(mkinfo $1.i $2.i, Mseq.empty) }
+  | LSQUARE BAR seq BAR RSQUARE { TmArray(mkinfo $1.i $5.i, Array.of_list $3) }
+  | LSQUARE BAR BAR RSQUARE { TmArray(mkinfo $1.i $4.i, [||]) }
   | LBRACKET labels RBRACKET
       { TmRecord(mkinfo $1.i $3.i, $2 |> List.fold_left
         (fun acc (k,v) -> Record.add k v acc) Record.empty) }
@@ -605,6 +608,8 @@ ty_atom:
                       Record.empty
       in
       TyRecord(mkinfo $1.i $3.i, r) }
+  | TARRAY LSQUARE ty RSQUARE
+    { TyArray (mkinfo $1.i $4.i, $3) }
   | TTENSOR LSQUARE ty RSQUARE
     { TyTensor(mkinfo $1.i $4.i, $3) }
   | TUNKNOWN

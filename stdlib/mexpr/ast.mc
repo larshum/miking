@@ -1,5 +1,6 @@
 -- Language fragments of MExpr
 
+include "array.mc"
 include "info.mc"
 include "name.mc"
 include "string.mc"
@@ -452,6 +453,28 @@ lang ConstAst = Ast
   | TmConst t -> TmConst {t with ty = ty}
 end
 
+lang ArrayAst = Ast
+  syn Expr =
+  | TmArray {tms : Array[Expr], ty : Type, info : Info}
+
+  sem infoTm =
+  | TmArray t -> t.info
+
+  sem tyTm =
+  | TmArray t -> t.ty
+
+  sem withInfo info =
+  | TmArray t -> TmArray {t with info = info}
+
+  sem withType ty =
+  | TmArray t -> TmArray {t with ty = ty}
+
+  sem smapAccumL_Expr_Expr f acc =
+  | TmArray t ->
+    match mapAccumLMutArray f acc t.tms with (acc, tms) in
+    (acc, TmArray {t with tms = tms})
+end
+
 -- TmSeq --
 lang SeqAst = Ast
   syn Expr =
@@ -477,7 +500,6 @@ lang SeqAst = Ast
       (acc, TmSeq {t with tms = tms})
     else never
 end
-
 
 -- TmRecord and TmRecordUpdate --
 lang RecordAst = Ast
@@ -850,6 +872,14 @@ end
 lang CmpSymbAst = SymbAst + BoolAst
   syn Const =
   | CEqsym {}
+end
+
+lang ArrayOpAst = ArrayAst + ConstAst
+  syn Const =
+  | CCreateMutArray {}
+  | CGetMutArray {}
+  | CSetMutArray {}
+  | CLengthMutArray {}
 end
 
 lang SeqOpAst = SeqAst + ConstAst
@@ -1323,6 +1353,22 @@ lang FunTypeAst = Ast
   | TyArrow r -> r.info
 end
 
+lang ArrayTypeAst = Ast
+  syn Type =
+  | TyArray {info : Info, ty : Type}
+
+  sem tyWithInfo info =
+  | TyArray t -> TyArray {t with info = info}
+
+  sem smapAccumL_Type_Type f acc =
+  | TyArray t ->
+    match f acc t.ty with (acc, ty) in
+    (acc, TyArray {t with ty = ty})
+
+  sem infoTy =
+  | TyArray t -> t.info
+end
+
 lang SeqTypeAst = Ast
   syn Type =
   | TySeq {info : Info,
@@ -1534,12 +1580,13 @@ lang MExprAst =
 
   -- Terms
   VarAst + AppAst + LamAst + RecordAst + LetAst + TypeAst + RecLetsAst +
-  ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst + ExtAst +
+  ConstAst + DataAst + MatchAst + UtestAst + ArrayAst + SeqAst + NeverAst +
+  ExtAst +
 
   -- Constants
   IntAst + ArithIntAst + ShiftIntAst + FloatAst + ArithFloatAst + BoolAst +
   CmpIntAst + IntCharConversionAst + CmpFloatAst + CharAst + CmpCharAst +
-  SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
+  SymbAst + CmpSymbAst + ArrayOpAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
   FloatStringConversionAst + TimeAst + ConTagAst + RefOpAst + TensorOpAst +
   BootParserAst + UnsafeCoerceAst +
@@ -1550,6 +1597,7 @@ lang MExprAst =
 
   -- Types
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
-  FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst +
-  VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst + AliasTypeAst
+  FunTypeAst + ArrayTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst +
+  ConTypeAst + VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst +
+  AliasTypeAst
 end

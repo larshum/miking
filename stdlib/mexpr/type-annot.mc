@@ -163,6 +163,14 @@ lang FunCompatibleType = CompatibleType + FunTypeAst
     else None ()
 end
 
+lang ArrayCompatibleType = CompatibleType + ArrayTypeAst
+  sem compatibleTypeBase tyEnv =
+  | (TyArray t1, TyArray t2) ->
+    match compatibleType tyEnv t1.ty t2.ty with Some t then
+      Some (TyArray {t1 with ty = t})
+    else None ()
+end
+
 lang SeqCompatibleType = CompatibleType + SeqTypeAst
   sem compatibleTypeBase (tyEnv : Map Name Type) =
   | (TySeq t1, TySeq t2) ->
@@ -393,6 +401,21 @@ lang ConstTypeAnnot = TypeAnnot + MExprConstType + AllTypeAst
   | TmConst t ->
     recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
     TmConst {t with ty = inspectType (f (tyConst t.val))}
+end
+
+lang ArrayTypeAnnot = TypeAnnot + ArrayAst + MExprEq
+  sem typeAnnotExpr env =
+  | TmArray t ->
+    let tms = mapMutArray (typeAnnotExpr env) t.tms in
+    let elemTy =
+      if eqi (lengthMutArray tms) 0 then ityunknown_ t.info
+      else
+        let types = mapMutArray tyTm tms in
+        match optionFoldlMMutArray (compatibleType env.tyEnv) (ityunknown_ t.info) types
+        with Some ty then ty
+        else ityunknown_ t.info
+    in
+    TmArray {t with tms = tms, ty = ityarray_ t.info elemTy}
 end
 
 lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
@@ -762,16 +785,16 @@ lang MExprTypeAnnot =
   -- Type compatibility
   UnknownCompatibleType + ConCompatibleType + BoolCompatibleType +
   IntCompatibleType + FloatCompatibleType + CharCompatibleType +
-  FunCompatibleType + SeqCompatibleType + TensorCompatibleType +
-  RecordCompatibleType + VariantCompatibleType + AppCompatibleType +
-  PropagateArrowLambda + PropagateLetType + VarCompatibleType +
-  AllCompatibleType + AliasCompatibleType +
+  FunCompatibleType + ArrayCompatibleType + SeqCompatibleType +
+  TensorCompatibleType + RecordCompatibleType + VariantCompatibleType +
+  AppCompatibleType + PropagateArrowLambda + PropagateLetType +
+  VarCompatibleType + AllCompatibleType + AliasCompatibleType +
 
   -- Terms
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
   TypeTypeAnnot + RecLetsTypeAnnot + ConstTypeAnnot + DataTypeAnnot +
-  MatchTypeAnnot + UtestTypeAnnot + SeqTypeAnnot + NeverTypeAnnot +
-  ExpTypeAnnot +
+  MatchTypeAnnot + UtestTypeAnnot + ArrayTypeAnnot + SeqTypeAnnot +
+  NeverTypeAnnot + ExpTypeAnnot +
 
   -- Patterns
   NamedPatTypeAnnot + SeqTotPatTypeAnnot + SeqEdgePatTypeAnnot +

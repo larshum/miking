@@ -44,6 +44,8 @@ let idTmNever = 114
 
 let idTmExt = 115
 
+let idTmArray = 116
+
 (* Types *)
 let idTyUnknown = 200
 
@@ -72,6 +74,8 @@ let idTyApp = 211
 let idTyTensor = 212
 
 let idTyAll = 213
+
+let idTyArray = 214
 
 (* Const literals *)
 let idCBool = 300
@@ -203,6 +207,10 @@ let getData = function
       (idTmNever, [fi], [], [], [], [], [], [], [], [])
   | PTreeTm (TmExt (fi, x, _, e, ty, t)) ->
       (idTmExt, [fi], [], [ty], [t], [x], [(if e then 1 else 0)], [], [], [])
+  | PTreeTm (TmArray (fi, ts)) ->
+      let len = Array.length ts in
+      let tms = Array.to_list ts in
+      (idTmArray, [fi], [len], [], tms, [], [], [], [], [])
   (* Types *)
   | PTreeTy (TyUnknown fi) ->
       (idTyUnknown, [fi], [], [], [], [], [], [], [], [])
@@ -235,6 +243,8 @@ let getData = function
       (idTyVar, [fi], [], [], [], [x], [], [], [], [])
   | PTreeTy (TyApp (fi, ty1, ty2)) ->
       (idTyApp, [fi], [], [ty1; ty2], [], [], [], [], [], [])
+  | PTreeTy (TyArray (fi, ty)) ->
+      (idTyArray, [fi], [], [ty], [], [], [], [], [], [])
   (* Const *)
   | PTreeConst (CBool v) ->
       let i = if v then 1 else 0 in
@@ -472,6 +482,23 @@ let arity = function
   | Cchar2int ->
       1
   | Cint2char ->
+      1
+  (* MCore intrinsic: mutable arrays *)
+  | CcreateMutArray None ->
+      2
+  | CcreateMutArray (Some _) ->
+      1
+  | CgetMutArray None ->
+      2
+  | CgetMutArray (Some _) ->
+      1
+  | CsetMutArray (None, None) ->
+      3
+  | CsetMutArray (Some _, None) ->
+      2
+  | CsetMutArray (_, Some _) ->
+      1
+  | ClengthMutArray ->
       1
   (* MCore intrinsic: sequences *)
   | Ccreate None ->
@@ -789,6 +816,8 @@ let shape_str = function
       Record.bindings record |> List.map fst
       |> Ustring.concat (us ",")
       |> fun x -> us "record: {" ^. x ^. us "}"
+  | TmArray _ ->
+      us "Array"
   | TmSeq _ ->
       us "Sequence"
   | TmConApp (_, x, s, _) ->
@@ -835,6 +864,8 @@ let unittest_failed fi onfail_str using_str =
 (* Check if two value terms are equal *)
 let rec val_equal v1 v2 =
   match (v1, v2) with
+  | TmArray (_, a1), TmArray (_, a2) ->
+      Array.for_all2 val_equal a1 a2
   | TmSeq (_, s1), TmSeq (_, s2) ->
       Mseq.Helpers.equal val_equal s1 s2
   | TmRecord (_, r1), TmRecord (_, r2) ->
@@ -987,6 +1018,8 @@ let parseMExprString allow_free keywords str =
 
 let rec is_value = function
   | TmConst (_, _) ->
+      true
+  | TmArray (_, _) ->
       true
   | TmSeq (_, tms) ->
       let _ = tms in
@@ -1310,6 +1343,33 @@ and delta (apply : info -> tm -> tm -> tm) fi c v =
   | Cint2char, TmConst (fi, CInt v) ->
       TmConst (fi, CChar v)
   | Cint2char, _ ->
+      fail_constapp fi
+  (* MCore intrinsic: mutable arrays *)
+  | CcreateMutArray None, TmConst (_, CInt n) ->
+      TmConst (fi, CcreateMutArray (Some n))
+  | CcreateMutArray (Some n), f ->
+      let createf i = apply f (TmConst (NoInfo, CInt i)) in
+      TmArray (tm_info f, Array.init n createf)
+  | CcreateMutArray _, _ ->
+      fail_constapp fi
+  | CgetMutArray None, TmArray (fi, a) ->
+      TmConst (fi, CgetMutArray (Some a))
+  | CgetMutArray (Some a), TmConst (_, CInt i) -> (
+      try a.(i) with _ -> raise_error fi index_out_of_bounds_in_seq_msg )
+  | CgetMutArray None, _ | CgetMutArray (Some _), _ ->
+      fail_constapp fi
+  | CsetMutArray (None, None), TmArray (fi, a) ->
+      TmConst (fi, CsetMutArray (Some a, None))
+  | CsetMutArray (Some a, None), TmConst (_, CInt i) ->
+      TmConst (fi, CsetMutArray (Some a, Some i))
+  | CsetMutArray (Some a, Some i), v -> (
+      try a.(i) <- v; tm_unit
+      with _ -> raise_error fi index_out_of_bounds_in_seq_msg )
+  | CsetMutArray (None, _), _ | CsetMutArray (Some _, _), _ ->
+      fail_constapp fi
+  | ClengthMutArray, TmArray (fi, a) ->
+      TmConst (fi, CInt (Array.length a))
+  | ClengthMutArray, _ ->
       fail_constapp fi
   (* MCore intrinsic: sequences *)
   | Ccreate None, TmConst (_, CInt n) ->
@@ -2155,6 +2215,7 @@ and apply (pe : peval) (fiapp : info) (f : tm) (a : tm) : tm =
   (* Constant application using the delta function *)
   | ( TmConst (_, c)
     , ( TmConst (_, _)
+      | TmArray (_, _)
       | TmSeq (_, _)
       | TmRecord (_, _)
       | TmConApp (_, _, _, _)
@@ -2279,6 +2340,9 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
   (* Constant *)
   | TmConst (_, _) ->
       t
+  (* Arrays *)
+  | TmArray (fi, tms) ->
+      TmArray (fi, Array.map (eval env pe) tms)
   (* Sequences *)
   | TmSeq (fi, tms) ->
       TmSeq (fi, Mseq.map (eval env pe) tms)
@@ -2443,6 +2507,7 @@ let rec eval_toplevel (env : (Symb.t * tm) list) (pe : peval) = function
     | TmClos _
     | TmApp _
     | TmConst _
+    | TmArray _
     | TmSeq _
     | TmRecord _
     | TmRecordUpdate _

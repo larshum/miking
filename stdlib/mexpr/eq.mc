@@ -319,6 +319,18 @@ lang UtestEq = Eq + UtestAst
     else None ()
 end
 
+lang ArrayEq = Eq + ArrayAst
+  sem eqExprH env free lhs =
+  | TmArray {tms = ts2, ty = ty2} ->
+    match lhs with TmArray {tms = ts1, ty = ty1} then
+      let n = lengthMutArray ts1 in
+      if eqi n (lengthMutArray ts2) then
+        let z = createMutArray n (lam i. (getMutArray ts1 i, getMutArray ts2 i)) in
+        optionFoldlMMutArray (lam free. lam tp. eqExprH env free tp.0 tp.1) free z
+      else None ()
+    else None ()
+end
+
 lang SeqEq = Eq + SeqAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmSeq {tms = ts2, ty = ty2} ->
@@ -582,6 +594,14 @@ lang FunTypeEq = Eq + FunTypeAst
     else None ()
 end
 
+lang ArrayTypeEq = Eq + ArrayTypeAst
+  sem eqTypeH typeEnv free lhs =
+  | TyArray r ->
+    match unwrapType lhs with TyArray l then
+      eqTypeH typeEnv free l.ty r.ty
+    else None ()
+end
+
 lang SeqTypeEq = Eq + SeqTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TySeq r ->
@@ -699,7 +719,7 @@ lang MExprEq =
 
   -- Terms
   + VarEq + AppEq + LamEq + RecordEq + LetEq + RecLetsEq + ConstEq + DataEq +
-  MatchEq + UtestEq + SeqEq + NeverEq + ExtEq
+  MatchEq + UtestEq + ArrayEq + SeqEq + NeverEq + ExtEq
 
   -- Constants
   + IntEq + FloatEq + BoolEq + CharEq + SymbEq
@@ -710,8 +730,8 @@ lang MExprEq =
 
   -- Types
   + UnknownTypeEq + BoolTypeEq + IntTypeEq + FloatTypeEq + CharTypeEq +
-  FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + ConTypeEq + VarTypeEq +
-  AllTypeEq + AppTypeEq + TensorTypeEq + AliasTypeEq
+  FunTypeEq + ArrayTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq +
+  ConTypeEq + VarTypeEq + AllTypeEq + AppTypeEq + TensorTypeEq + AliasTypeEq
 end
 
 -----------
@@ -1091,6 +1111,8 @@ utest eqType tyarr1 tyarr2 with false in
 utest eqType tyarr2 tyarr3 with false in
 utest eqType tyarr3 tyarr4 with false in
 utest tystr_ with tystr_ using eqType in
+utest tyarray_ tyint_ with tyarray_ tyint_ using eqType in
+utest eqType (tyarray_ tyint_) (tyarray_ tybool_) with false in
 utest tyseq tyint_ with tyseq tyint_ using eqType in
 utest tytensor_ tyint_ with tytensor_ tyint_ using eqType in
 utest eqType tystr_ (tyseq tyint_) with false in
@@ -1153,6 +1175,14 @@ utest ut1 with ut2 using eqExpr in
 let ut1 = utestuo_ lam1 lam2 v3 v4 v3 in
 let ut2 = utestuo_ lam2 lam1 v4 v3 v4 in
 utest ut1 with ut2 using eqExpr in
+
+-- Arrays
+let a1 = array_ [|lam1, lam2, v3|] in
+let a2 = array_ [|lam2, lam1, v4|] in
+let a3 = array_ [|lam1, v5e, v3|] in
+utest a1 with a2 using eqExpr in
+utest eqExpr a1 a3 with false in
+utest eqExpr (array_ [|c1|]) (array_ [|c2|]) with false in
 
 -- Sequences
 let s1 = seq_ [lam1, lam2, v3] in

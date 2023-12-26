@@ -1,3 +1,4 @@
+include "array.mc"
 include "bool.mc"
 include "common.mc"
 include "seq.mc"
@@ -33,11 +34,16 @@ let ppBool : Bool -> String = bool2string
 let ppInt : Int -> String = int2string
 let ppFloat : Float -> String = float2string
 let ppChar : Char -> String = showChar
+let ppArray : all a. (a -> String) -> Array[a] -> String = lam pp. lam a.
+  join ["[|", strJoin "," (map pp (seqOfMutArray a)), "|]"]
 let ppSeq : all a. (a -> String) -> [a] -> String = lam pp. lam s.
   join ["[", strJoin "," (map pp s), "]"]
 
 let eqInt : Int -> Int -> Bool = eqi
 let eqFloat : Float -> Float -> Bool = eqf
+let eqArray : all a. (a -> a -> Bool) -> Array[a] -> Array[a] -> Bool =
+  lam eq. lam l. lam r.
+  eqSeq eq (seqOfMutArray l) (seqOfMutArray r)
 
 let utestExitOnFailure : all a. a -> a = lam t.
   if eqi (deref numFailed) 0 then
@@ -55,5 +61,5 @@ mexpr
 -- want to be included. This allows us to remove other functions that are not
 -- of interest through deadcode elimination.
 ( utestRunner, utestDefaultOnFail, utestExitOnFailure, defaultPprint, ppBool
-, ppInt, ppFloat, ppChar, ppSeq , eqBool, eqInt , eqFloat, eqChar , eqSeq
-, join)
+, ppInt, ppFloat, ppChar, ppArray, ppSeq, eqBool, eqInt, eqFloat, eqChar
+, eqArray, eqSeq , join)

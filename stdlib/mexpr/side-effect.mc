@@ -74,6 +74,8 @@ lang ConstSideEffect = ConstSideEffectBase + MExprAst
   | CStringIsFloat _ | CString2float _ | CFloat2string _ -> false
   | CSymb _ | CGensym _ | CSym2hash _ -> true
   | CEqsym _ -> true
+  | CCreateMutArray _ | CGetMutArray _ | CLengthMutArray _ -> false
+  | CSetMutArray _ -> true
   | CSet _ | CGet _ | CCons _ | CSnoc _ | CConcat _ | CLength _ | CReverse _
   | CHead _ | CTail _ | CNull _ | CMap _ | CMapi _ | CIter _ | CIteri _
   | CFoldl _ | CFoldr _ | CCreate _ | CCreateList _ | CCreateRope _
