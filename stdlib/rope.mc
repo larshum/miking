@@ -1,6 +1,5 @@
 include "array.mc"
 include "list.mc"
-include "string.mc"
 
 lang MExprRopeRepr
   syn RopeRepr a =
@@ -202,6 +201,10 @@ lang MExprRope = MExprRopeRepr
     if eqi n 0 then _failCheck "Tail on empty rope"
     else subRope r 1 (subi n 1)
 
+  sem nullRope : all a. Rope a -> Bool
+  sem nullRope =
+  | r -> eqi (lengthRope r) 0
+
   sem iterRope : all a. (a -> ()) -> Rope a -> ()
   sem iterRope f =
   | r -> iterRopeRepr f (deref r)
@@ -256,11 +259,21 @@ lang MExprRope = MExprRopeRepr
       eqMutArray eqf lhs rhs
     else false
 
+  sem toSeqRope : all a. Rope a -> [a]
+  sem toSeqRope =
+  | r ->
+    match deref (collapseRope r) with Leaf a then seqOfMutArray a
+    else error "Invalid shape of collapsed rope"
+
+  sem ofSeqRope : all a. [a] -> Rope a
+  sem ofSeqRope =
+  | s -> ref (Leaf (seqToMutArray s))
+
   sem toMutArrayRope : all a. Rope a -> Array[a]
   sem toMutArrayRope =
   | r ->
     match deref (collapseRope r) with Leaf a then a
-    else error "Collapsed rope is not one array"
+    else error "Invalid shape of collapsed rope"
 
   sem ofMutArrayRope : all a. Array[a] -> Rope a
   sem ofMutArrayRope =
@@ -274,6 +287,14 @@ use MExprRope in
 let eqRopeMutArray = lam eqf. lam r. lam a.
   eqMutArray eqf (toMutArrayRope r) a
 in
+recursive let strJoin = lam delim. lam strs.
+  match strs with [x, y] then
+    concat x (concat delim y)
+  else match strs with [x] ++ rest then
+    concat x (concat delim (strJoin delim rest))
+  else ""
+in
+let join = lam strs. foldl concat [] strs in
 let ppRopeMutArray = lam ppElem. lam l. lam r.
   join [
     "    LHS: [|", strJoin "," (map ppElem (seqOfMutArray (toMutArrayRope l))), "|]\n",

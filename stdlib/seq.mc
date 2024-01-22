@@ -1,5 +1,32 @@
 include "option.mc"
 include "bool.mc"
+include "rope.mc"
+
+--type Seq a = use MExprRope in Rope a
+--
+--let create : all a. Int -> (Int -> a) -> Seq a = use MExprRope in createRope
+--let createList : all a. Int -> (Int -> a) -> Seq a = create
+--let createRope : all a. Int -> (Int -> a) -> Seq a = create
+--let isList : all a. Seq a -> Bool = false
+--let isRope : all a. Seq a -> Bool = true
+--let length : all a. Seq a -> Int = use MExprRope in lengthRope
+--let concat : all a. Seq a -> Seq a -> Seq a = use MExprRope in concatRope
+--let get : all a. Seq a -> Int -> a = use MExprRope in getRope
+--let set : all a. Seq a -> Int -> a -> Seq a = use MExprRope in setRope
+--let cons : all a. a -> Seq a -> Seq a = use MExprRope in consRope
+--let snoc : all a. Seq a -> a -> Seq a = use MExprRope in snocRope
+--let splitAt : all a. Seq a -> Int -> (Seq a, Seq a) = use MExprRope in splitAtRope
+--let reverse : all a. Seq a -> Seq a = use MExprRope in reverseRope
+--let head : all a. Seq a -> a = use MExprRope in headRope
+--let tail : all a. Seq a -> Seq a = use MExprRope in tailRope
+--let null : all a. Seq a -> Bool = use MExprRope in nullRope
+--let map : all a. all b. (a -> b) -> Seq a -> Seq b = use MExprRope in mapRope
+--let mapi : all a. all b. (Int -> a -> b) -> Seq a -> Seq b = use MExprRope in mapiRope
+--let iter : all a. (a -> ()) -> Seq a -> () = use MExprRope in iterRope
+--let iteri : all a. (Int -> a -> ()) -> Seq a -> () = use MExprRope in iteriRope
+--let foldl : all a. all b. (a -> b -> a) -> a -> Seq b -> a = use MExprRope in foldlRope
+--let foldr : all a. all b. (b -> a -> a) -> a -> Seq b -> a = use MExprRope in foldrRope
+--let subsequence : all a. Seq a -> Int -> Int -> Seq a = use MExprRope in subRope
 
 let make : all a. Int -> a -> [a] = lam n. lam v. create n (lam. v)
 

@@ -3,8 +3,7 @@ open Printf
 let menu () =
   printf
     "Usage: run <benchmark-name-without-postfix-name> <iteration> [excludes]\n\n" ;
-  printf "Example: run factorial 1000\n\n" ;
-  printf "To exclude certain tests, add excluded numbers. For instance\n" ;
+  printf "Example: run factorial 1000\n\n" ; printf "To exclude certain tests, add excluded numbers. For instance\n" ;
   printf "command 'run factorial 1000 24' excludes the Miking interpreter\n" ;
   printf "and OCaml byte code tests (test numbers 2 and 4).\n" ;
   exit 1
@@ -64,14 +63,20 @@ let main =
     measure excludes 3 "Miking compiler:   " ("mi compile " ^ name_mc)
       ("./" ^ name ^ " " ^ iterations)
       ("rm -f " ^ name) ;
+    let native_name = name ^ "_x.mc" in
+    if Sys.file_exists native_name then (
+      measure excludes 4 "Miking native seq: " ("mi compile " ^ native_name)
+        ("./" ^ name ^ "_x " ^ iterations)
+        ("rm -f " ^ name ^ "_x")
+    );
     if Sys.file_exists (name ^ ".ml") then (
       generate_dune name ;
       generate_dune_project () ;
-      measure excludes 4 "Ocaml byte code    "
+      measure excludes 5 "Ocaml byte code    "
         ("dune build --root ." ^ " " ^ name ^ ".bc")
         ("ocamlrun _build/default/" ^ name ^ ".bc" ^ " " ^ iterations)
         "rm -rf _build" ;
-      measure excludes 5 "OCaml native:      "
+      measure excludes 6 "OCaml native:      "
         ("dune build --root ." ^ " " ^ name ^ ".exe")
         ("./_build/default/" ^ name ^ ".exe" ^ " " ^ iterations)
         "rm -rf _build && rm dune*" )
