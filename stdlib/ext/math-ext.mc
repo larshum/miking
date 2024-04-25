@@ -1,6 +1,9 @@
 let maxf: Float -> Float -> Float = lam r. lam l. if gtf r l then r else l
 
-let absf: Float -> Float = lam f. maxf f (negf f)
+let absf: Float -> Float = lam f. maxf (negf f) f
+
+utest absf 0.0 with 0.0
+utest absf -0.0 with 0.0
 
 let eqfApprox = lam epsilon. lam r. lam l.
   if leqf (absf (subf r l)) epsilon then true else false
