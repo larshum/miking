@@ -74,15 +74,25 @@ lang FutharkConstPrettyPrint = FutharkAst + FutharkLiteralSizePrettyPrint
       concat szStr ".inf"
     else if eqf v (negf inf) then
       join ["-", szStr, ".inf"]
-    else if eqf (subf (int2float (roundfi v)) v) 0.0 then
-      join [float2string v, "0", szStr]
-    else concat (float2string v) szStr
+    else
+      let str =
+        if eqf (subf (int2float (roundfi v)) v) 0.0 then
+          join [float2string (absf v), "0", szStr]
+        else
+          concat (float2string (absf v)) szStr
+      in
+      if ltf v 0.0 then join ["(-", str, ")"]
+      else str
 
   sem pprintConst =
   | FCInt t ->
-    concat
-      (int2string t.val)
-      (optionGetOrElse (lam. "") (optionMap pprintIntSize t.sz))
+    let str =
+      concat
+        (int2string (absi t.val))
+        (optionGetOrElse (lam. "") (optionMap pprintIntSize t.sz))
+    in
+    if lti t.val 0 then join ["(-", str, ")"]
+    else str
   | FCFloat t ->
     futharkFloatToString t.val t.sz
   | FCBool t -> if t.val then "true" else "false"
@@ -426,6 +436,12 @@ utest futharkFloatToString (negf inf) (Some (F64 ())) with "-f64.inf" in
 utest futharkFloatToString nan (None ()) with "f64.nan" in
 utest futharkFloatToString nan (Some (F32 ())) with "f32.nan" in
 utest futharkFloatToString nan (Some (F64 ())) with "f64.nan" in
+
+utest futharkFloatToString -1.0 (None ()) with "(-1.0f64)" in
+
+utest pprintConst (FCInt {val = 0, sz = None ()}) with "0" in
+utest pprintConst (FCInt {val = 0, sz = Some (I64 ())}) with "0i64" in
+utest pprintConst (FCInt {val = -1, sz = None ()}) with "(-1)" in
 
 let printDecl = lam decl.
   let prog = FProg {decls = [decl]} in
