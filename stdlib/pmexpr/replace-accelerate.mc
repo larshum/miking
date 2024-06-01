@@ -133,7 +133,12 @@ lang PMExprReplaceAccelerate =
   sem replaceAccelerateH : Map Name AccelerateData -> GenerateEnv -> [Top]
                         -> Expr -> ([Top], Expr)
   sem replaceAccelerateH accelerated env acc =
-  | t & (TmApp {lhs = lhs, ty = appTy}) ->
+  | t & (TmApp (tapp & {lhs = lhs, rhs = rhs, ty = appTy})) ->
+    let replaceInner = lam.
+      match replaceAccelerateH accelerated env acc lhs with (acc, lhs) in
+      match replaceAccelerateH accelerated env acc rhs with (acc, rhs) in
+      (acc, TmApp {tapp with lhs = lhs, rhs = rhs})
+    in
     let appArgs = collectAppArguments t in
     match appArgs with (TmVar {ident = id}, args) then
       if mapMem id accelerated then
@@ -143,8 +148,8 @@ lang PMExprReplaceAccelerate =
           let lhs = withType appTy lhs in
           convertAccelerateParameters env acc lhs
         else convertAccelerateParameters env acc t
-      else (acc, t)
-    else (acc, t)
+      else replaceInner ()
+    else replaceInner ()
   | TmLet t ->
     if mapMem t.ident accelerated then
       replaceAccelerateH accelerated env acc t.inexpr
