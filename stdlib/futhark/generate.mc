@@ -16,14 +16,18 @@ let extMap = mapFromSeq cmpString
   [("externalSin", "f64.sin"), ("externalCos", "f64.cos")]
 
 type FutharkGenerateEnv = use Ast in {
+  use32BitFloats : Bool,
   entryPoints : Set Name,
   boundNames : Map Name Expr
 }
 
 lang FutharkConstGenerate = MExprAst + FutharkAst
-  sem generateConst (info : Info) =
+  sem generateConst : FutharkGenerateEnv -> Info -> Const -> FutConst
+  sem generateConst env info =
   | CInt n -> FCInt {val = n.val, sz = Some (I64 ())}
-  | CFloat f -> FCFloat {val = f.val, sz = Some (F64 ())}
+  | CFloat f ->
+    let sz = if env.use32BitFloats then F32 () else F64 () in
+    FCFloat {val = f.val, sz = Some sz}
   | CBool b -> FCBool {val = b.val}
   | CChar c -> FCInt {val = char2int c.val, sz = Some (I64 ())}
   | CAddi _ | CAddf _ -> FCAdd ()
@@ -56,7 +60,9 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
   sem generateType : FutharkGenerateEnv -> Type -> FutType
   sem generateType env =
   | TyInt t -> FTyInt {info = t.info, sz = I64 ()}
-  | TyFloat t -> FTyFloat {info = t.info, sz = F64 ()}
+  | TyFloat t ->
+    let sz = if env.use32BitFloats then F32 () else F64 () in
+    FTyFloat {info = t.info, sz = sz}
   | TyBool t -> FTyBool {info = t.info}
   | TyChar t -> FTyInt {info = t.info, sz = I64 ()}
   | TySeq t ->
@@ -387,7 +393,7 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
     FEArray {tms = map (generateExpr env) t.tms, ty = generateType env t.ty,
              info = t.info}
   | TmConst t ->
-    FEConst {val = generateConst t.info t.val, ty = generateType env t.ty,
+    FEConst {val = generateConst env t.info t.val, ty = generateType env t.ty,
              info = t.info}
   | TmLam t ->
     FELam {ident = t.ident, body = generateExpr env t.body,
@@ -527,9 +533,11 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
 end
 
 lang FutharkGenerate = FutharkToplevelGenerate + MExprCmp
-  sem generateProgram (entryPoints : Set Name) =
+  sem generateProgram : Bool -> Set Name -> Expr -> FutProg
+  sem generateProgram use32BitFloats entryPoints =
   | prog ->
     let emptyEnv = {
+      use32BitFloats = use32BitFloats,
       entryPoints = entryPoints,
       boundNames = mapEmpty nameCmp
     } in
@@ -543,6 +551,8 @@ end
 mexpr
 
 use TestLang in
+
+let genProg = generateProgram false in
 
 let f = nameSym "f" in
 let c = nameSym "c" in
@@ -565,7 +575,7 @@ let charsExpected = FProg {decls = [
     info = NoInfo ()}]} in
 
 let entryPoints = setOfSeq nameCmp [] in
-utest printFutProg (generateProgram entryPoints chars)
+utest printFutProg (genProg entryPoints chars)
 with printFutProg charsExpected using eqSeq eqc in
 
 let intseq = nameSym "intseq" in
@@ -654,7 +664,7 @@ let expected = FProg {decls = [
     info = NoInfo ()}
 ]} in
 let entryPoints = setOfSeq nameCmp [f, g, min] in
-utest printFutProg (generateProgram entryPoints t) with printFutProg expected
+utest printFutProg (genProg entryPoints t) with printFutProg expected
 using eqSeq eqc in
 
 let acc = nameSym "acc" in
@@ -678,7 +688,7 @@ let expected = FProg {decls = [
         y (nFutVar_ s) (futAdd_ (nFutVar_ acc) (nFutVar_ y)),
     info = NoInfo ()}]} in
 let entryPoints = setOfSeq nameCmp [f] in
-utest printFutProg (generateProgram entryPoints foldlToFor)
+utest printFutProg (genProg entryPoints foldlToFor)
 with printFutProg expected using eqSeq eqc in
 
 let negation = typeCheck
@@ -695,7 +705,7 @@ let expected = FProg {decls = [
       ("b", futApp_ (futConst_ (FCNegf ())) (nFutVar_ b))],
     info = NoInfo ()}]} in
 let entryPoints = setEmpty nameCmp in
-utest printFutProg (generateProgram entryPoints negation)
+utest printFutProg (genProg entryPoints negation)
 with printFutProg expected using eqSeq eqc in
 
 let recordTy = tyrecord_ [("a", tyint_), ("b", tyfloat_)] in

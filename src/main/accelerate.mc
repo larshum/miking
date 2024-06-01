@@ -111,10 +111,10 @@ let pprintCudaAst = use CudaPrettyPrint in
   lam ast : CudaProg.
   printCudaProg cCompilerNames ast
 
-let futharkTranslation : use MExprFutharkCompile in Set Name -> Expr -> FutProg =
-  lam entryPoints. lam ast.
+let futharkTranslation : use MExprFutharkCompile in Options -> Set Name -> Expr -> FutProg =
+  lam options. lam entryPoints. lam ast.
   use MExprFutharkCompile in
-  let ast = generateProgram entryPoints ast in
+  let ast = generateProgram options.use32BitFloats entryPoints ast in
   let ast = liftRecordParameters ast in
   let ast = useRecordPatternInForEach ast in
   let ast = inlineLiterals ast in
@@ -178,8 +178,8 @@ let generateGpuCode =
       else match class with Futhark _ then
         use MExprFutharkCompile in
         let accelerateIds = mapMap (lam. ()) accelerateData in
-        let futharkProg = futharkTranslation accelerateIds ast in
-        let wrapperProg = generateWrapperCode accelerateData in
+        let futharkProg = futharkTranslation options accelerateIds ast in
+        let wrapperProg = generateWrapperCode options.use32BitFloats accelerateData in
         FutharkCompileResult (futharkProg, wrapperProg)
       else never)
     asts

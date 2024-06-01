@@ -14,6 +14,8 @@ let getFutharkSeqTypeString : String -> Int -> String =
   lam futharkElementTypeString. lam numDims.
   join [futharkElementTypeString, "_", int2string numDims, "d"]
 
+let use32BitFloatsRef : Ref Bool = ref false
+
 lang FutharkCWrapperBase = PMExprCWrapper + RecordTypeUtils
   -- Definition of the intermediate representation definitions for the Futhark
   -- backend. Note that nested sequences are treated as one 'FutharkSeqRepr',
@@ -34,6 +36,7 @@ lang FutharkCWrapperBase = PMExprCWrapper + RecordTypeUtils
   sem getFutharkElementTypeString : CType -> String
   sem getFutharkElementTypeString =
   | CTyChar _ | CTyInt64 _ -> "i64"
+  | CTyFloat _ -> "f32"
   | CTyDouble _ -> "f64"
   | CTyPtr t -> getFutharkElementTypeString t.ty
 
@@ -58,7 +61,8 @@ lang FutharkCWrapperBase = PMExprCWrapper + RecordTypeUtils
   sem mexprToCType : Type -> CType
   sem mexprToCType =
   | TyInt _ -> CTyInt64 ()
-  | TyFloat _ -> CTyDouble ()
+  | TyFloat _ ->
+    if deref use32BitFloatsRef then CTyFloat () else CTyDouble ()
   | TyBool _ -> CTyChar ()
   | TyChar _ -> CTyChar ()
   | ty ->
@@ -184,7 +188,7 @@ lang FutharkOCamlToCWrapper = FutharkCWrapperBase
     -- specially, because an OCaml array of floats must be accessed via
     -- 'Double_field' rather than 'Field' as for other arrays.
     let fieldAccessExpr =
-      match elemTy with CTyDouble _ then
+      match elemTy with CTyFloat _ | CTyDouble _ then
         CEApp {
           fun = _getIdentExn "Double_field",
           args = [CEVar {id = srcIdent}, CEVar {id = iterIdent}]}
@@ -567,7 +571,7 @@ lang FutharkCToOCamlWrapper = FutharkCWrapperBase
       lhs = CEVar {id = srcIdent},
       rhs = CEVar {id = countIdent}} in
     let fieldStoreExpr =
-      match elemTy with CTyDouble _ then
+      match elemTy with CTyFloat _ | CTyDouble _ then
         CEApp {
           fun = _getIdentExn "Store_double_field",
           args = [
@@ -594,7 +598,7 @@ lang FutharkCToOCamlWrapper = FutharkCWrapperBase
         lhs = CEVar {id = countIdent},
         rhs = CEInt {i = 1}}}} in
     let tagExpr =
-      match elemTy with CTyDouble _ then
+      match elemTy with CTyFloat _ | CTyDouble _ then
         CEVar {id = _getIdentExn "Double_array_tag"}
       else CEInt {i = 0} in
     let loopStmts = [fieldStoreStmt, countIncrementStmt] in
@@ -732,9 +736,12 @@ lang FutharkCWrapper =
     let stmt5 = generateCToOCamlWrapper env in
     join [stmt1, stmt2, stmt3, stmt4, stmt5]
 
-  sem generateWrapperCode : Map Name AccelerateData -> CProg
-  sem generateWrapperCode =
+  sem generateWrapperCode : Bool -> Map Name AccelerateData -> CProg
+  sem generateWrapperCode use32BitFloats =
   | accelerated ->
+    -- NOTE(larshum, 2024-06-01): Use a reference to save a lot of time, as
+    -- most of the current code would need to be rewritten otherwise.
+    (if use32BitFloats then modref use32BitFloatsRef true else ());
     let env = generateInitWrapperEnv () in
     match generateWrapperCodeH env accelerated with (env, entryPointWrappers) in
     let contextInit = futharkContextInit env in
@@ -773,6 +780,6 @@ let dataEntry : AccelerateData = {
 } in
 let accelerated = mapFromSeq nameCmp [(functionIdent, dataEntry)] in
 
-let wrapperCode = generateWrapperCode accelerated in
+let wrapperCode = generateWrapperCode false accelerated in
 -- print (printCProg [] wrapperCode);
 ()
