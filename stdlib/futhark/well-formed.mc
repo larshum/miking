@@ -106,6 +106,8 @@ lang FutharkWellFormed = WellFormed + PMExprAst
     else sfold_Expr_Expr futharkWellFormedExpr acc (TmParallelReduce t)
   | TmParallelSizeCoercion t -> futharkWellFormedExpr acc t.e
   | TmParallelSizeEquality t -> acc
+  | TmInlineFuthark t -> acc
+  | TmInAccelerate t -> acc
   | expr -> cons (FutharkExprError expr) acc
 
   sem futharkWellFormedType : [WFError] -> Type -> [WFError]

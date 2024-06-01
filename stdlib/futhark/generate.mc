@@ -426,6 +426,10 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
   | TmParallelSizeEquality t ->
     FESizeEquality {x1 = t.x1, d1 = t.d1, x2 = t.x2, d2 = t.d2,
                     ty = generateType env t.ty, info = t.info}
+  | TmInlineFuthark t ->
+    FEVarExt {ident = t.s, ty = generateType env t.ty, info = t.info}
+  | TmInAccelerate t ->
+    FEConst {val = FCBool {val = true}, ty = generateType env t.ty, info = t.info}
   | TmRecLets t ->
     errorSingle [t.info] "Recursive functions are not supported by the Futhark backend"
   | t ->

@@ -19,6 +19,8 @@ lang PMExprAst =
   | TmPrintFloat {e : Expr, ty : Type, info : Info}
   | TmParallelSizeCoercion {e: Expr, size : Name, ty : Type, info : Info}
   | TmParallelSizeEquality {x1: Name, d1: Int, x2: Name, d2: Int, ty : Type, info : Info}
+  | TmInlineFuthark {s : String, ty : Type, info : Info}
+  | TmInAccelerate {ty : Type, info : Info}
 
   sem isKeyword =
   | TmAccelerate _ -> true
@@ -29,6 +31,8 @@ lang PMExprAst =
   | TmLoopAcc _ -> true
   | TmParallelLoop _ -> true
   | TmPrintFloat _ -> true
+  | TmInlineFuthark _ -> true
+  | TmInAccelerate _ -> true
 
   sem matchKeywordString (info : Info) =
   | "accelerate" ->
@@ -62,6 +66,27 @@ lang PMExprAst =
   | "printFloat" ->
     Some (1, lam lst. TmPrintFloat {e = get lst 0,
                                     ty = TyUnknown {info = info}, info = info})
+  | "inlineFuthark" ->
+    let tmCharToChar = lam tm.
+      match tm with TmConst {val = CChar {val = c}} then
+        Some c
+      else None ()
+    in
+    let toString = lam tms.
+      let s = mapOption tmCharToChar tms in
+      if eqi (length s) (length tms) then Some s
+      else None ()
+    in
+    let tryConstructInlineFutharkExpr = lam lst.
+      match get lst 0 with TmSeq {tms = tms} then
+        match toString tms with Some s then
+          TmInlineFuthark {s = s, ty = TyUnknown {info = info}, info = info}
+        else errorSingle [info] "The inlineFuthark intrinsic expects a string literal argument"
+      else errorSingle [info] "The inlineFuthark intrinsic expects a string literal argument"
+    in
+    Some (1, tryConstructInlineFutharkExpr)
+  | "inAccelerate" ->
+    Some (0, lam. TmInAccelerate {ty = TyUnknown {info = info}, info = info})
 
   sem tyTm =
   | TmAccelerate t -> t.ty
@@ -74,6 +99,8 @@ lang PMExprAst =
   | TmPrintFloat t -> t.ty
   | TmParallelSizeCoercion t -> t.ty
   | TmParallelSizeEquality t -> t.ty
+  | TmInlineFuthark t -> t.ty
+  | TmInAccelerate t -> t.ty
 
   sem infoTm =
   | TmAccelerate t -> t.info
@@ -86,6 +113,8 @@ lang PMExprAst =
   | TmPrintFloat t -> t.info
   | TmParallelSizeCoercion t -> t.info
   | TmParallelSizeEquality t -> t.info
+  | TmInlineFuthark t -> t.info
+  | TmInAccelerate t -> t.info
 
   sem withType (ty : Type) =
   | TmAccelerate t -> TmAccelerate {t with ty = ty}
@@ -98,6 +127,8 @@ lang PMExprAst =
   | TmPrintFloat t -> TmPrintFloat {t with ty = ty}
   | TmParallelSizeCoercion t -> TmParallelSizeCoercion {t with ty = ty}
   | TmParallelSizeEquality t -> TmParallelSizeEquality {t with ty = ty}
+  | TmInlineFuthark t -> TmInlineFuthark {t with ty = ty}
+  | TmInAccelerate t -> TmInAccelerate {t with ty = ty}
 
   sem smapAccumL_Expr_Expr f acc =
   | TmAccelerate t ->
@@ -135,6 +166,9 @@ lang PMExprAst =
   | TmParallelSizeCoercion t ->
     match f acc t.e with (acc, e) in
     (acc, TmParallelSizeCoercion {t with e = e})
+  | TmParallelSizeEquality t -> (acc, TmParallelSizeEquality t)
+  | TmInlineFuthark t -> (acc, TmInlineFuthark t)
+  | TmInAccelerate t -> (acc, TmInAccelerate t)
 
   sem typeCheckExpr env =
   | TmAccelerate t ->
@@ -213,6 +247,11 @@ lang PMExprAst =
     TmParallelSizeCoercion {{t with e = e} with ty = tyTm e}
   | TmParallelSizeEquality t ->
     TmParallelSizeEquality {t with ty = tyWithInfo t.info tyunit_}
+  | TmInlineFuthark t ->
+    let resTy = newvar env.currentLvl t.info in
+    TmInlineFuthark {t with ty = resTy}
+  | TmInAccelerate t ->
+    TmInAccelerate {t with ty = TyBool {info = t.info}}
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmAccelerate r ->
@@ -285,6 +324,15 @@ lang PMExprAst =
         else None ()
       else None ()
     else None ()
+  | TmInlineFuthark r ->
+    match lhs with TmInlineFuthark l then
+      if eqString l.s r.s then Some free
+      else None ()
+    else None ()
+  | TmInAccelerate r ->
+    match lhs with TmInAccelerate l then
+      Some free
+    else None ()
 
   sem normalize (k : Expr -> Expr) =
   | TmAccelerate t ->
@@ -345,6 +393,8 @@ lang PMExprAst =
   | TmParallelSizeCoercion t ->
     normalizeName (lam e. k (TmParallelSizeCoercion {t with e = e})) t.e
   | TmParallelSizeEquality t -> k (TmParallelSizeEquality t)
+  | TmInlineFuthark t -> k (TmInlineFuthark t)
+  | TmInAccelerate t -> k (TmInAccelerate t)
 end
 
 let accelerate_ = lam e.
@@ -388,6 +438,14 @@ let printFloat_ = lam e.
   use PMExprAst in
   TmPrintFloat {e = e, ty = tyunknown_, info = NoInfo ()}
 
+let inlineFuthark_ = lam s.
+  use PMExprAst in
+  TmInlineFuthark {s = s, ty = tyunknown_, info = NoInfo ()}
+
+let inAccelerate_ = lam.
+  use PMExprAst in
+  TmInAccelerate {ty = tyunknown_, info = NoInfo ()}
+
 mexpr
 
 use PMExprAst in
@@ -423,5 +481,11 @@ utest makeKeywords expr with parallelLoop_ (int_ 10) unitfn_ using eqExpr in
 
 let expr = app_ (var_ "printFloat") (float_ 3.14) in
 utest makeKeywords expr with printFloat_ (float_ 3.14) using eqExpr in
+
+let expr = app_ (var_ "inlineFuthark") (str_ "(+)") in
+utest makeKeywords expr with inlineFuthark_ "(+)" using eqExpr in
+
+let expr = var_ "inAccelerate" in
+utest makeKeywords expr with inAccelerate_ () using eqExpr in
 
 ()

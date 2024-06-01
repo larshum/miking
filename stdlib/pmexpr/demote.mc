@@ -244,9 +244,25 @@ lang PMExprDemotePrintFloat = PMExprDemoteBase
       ty = tyuk, info = t.info}
 end
 
+lang PMExprDemoteInlineFuthark = PMExprDemoteBase
+  sem demoteParallel =
+  | TmInlineFuthark t ->
+    let tyuk = TyUnknown {info = t.info} in
+    let msg = "Inline Futhark cannot be used outside of accelerate" in
+    TmApp {
+      lhs = TmConst {val = CError (), ty = tyuk, info = t.info},
+      rhs = str_ msg, ty = tyuk, info = t.info}
+end
+
+lang PMExprDemoteInAccelerate = PMExprDemoteBase
+  sem demoteParallel =
+  | TmInAccelerate t -> withInfo t.info (bool_ false)
+end
+
 lang PMExprDemote =
   PMExprDemoteAccelerate + PMExprDemoteFlatten + PMExprDemoteMap2 +
-  PMExprDemoteReduce + PMExprDemoteLoop + PMExprDemotePrintFloat
+  PMExprDemoteReduce + PMExprDemoteLoop + PMExprDemotePrintFloat +
+  PMExprDemoteInlineFuthark + PMExprDemoteInAccelerate
 end
 
 mexpr
