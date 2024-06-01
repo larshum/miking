@@ -13,6 +13,7 @@ include "pmexpr/build.mc"
 include "pmexpr/classify.mc"
 include "pmexpr/copy-analysis.mc"
 include "pmexpr/extract.mc"
+include "pmexpr/in-accelerate.mc"
 include "pmexpr/inline-higher-order.mc"
 include "pmexpr/nested-accelerate.mc"
 include "pmexpr/parallel-patterns.mc"
@@ -93,7 +94,7 @@ end
 lang PMExprCompileWellFormedBase =
   PMExprCompileWellFormedInstrumentation + PMExprBuild + MExprLambdaLift +
   PMExprExtractAccelerate + PMExprNestedAccelerate + PMExprTensorCopyAnalysis +
-  PMExprClassify
+  PMExprClassify + PMExprEliminateInAccelerate
 
   type WellFormedConfig = {
     dynamicChecks : Bool,
@@ -140,6 +141,7 @@ lang PMExprCompileWellFormedBase =
     match eliminateDummyParameter solutions accelerateData accelerateAst
     with (accelerateData, accelerateAst) in
     checkNestedAccelerate accelerateIds accelerateAst;
+    match eliminateInAccelerate ast accelerateAst with (ast, accelerateAst) in
     let accelerateData = eliminateTensorCopying accelerateData ast in
     let accelerateAsts = classifyAccelerated accelerateData accelerateAst in
     let ast =
