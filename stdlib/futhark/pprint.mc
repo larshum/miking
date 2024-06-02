@@ -192,8 +192,20 @@ lang FutharkTypePrettyPrint = FutharkLiteralSizePrettyPrint
       match pprintType indent env ty with (env, tyStr) in
       (env, join [str, " : ", tyStr])
     in
-    match mapAccumL pprintField env labels with (env, fields) in
-    (env, join ["{", strJoin "," fields, "}"])
+    let defaultPrint = lam.
+      match mapAccumL pprintField env labels with (env, fields) in
+      (env, join ["{", strJoin "," fields, "}"])
+    in
+    -- NOTE(larshum, 2024-06-02): If we have a tuple type of more than one
+    -- element, we pretty-print it as a tuple rather than a record with
+    -- numbered labels. This is somehow treated differently by Futhark
+    -- benchmarks.
+    match record2tuple fields with Some tys then
+      if gti (length tys) 1 then
+        match mapAccumL (pprintType indent) env tys with (env, tyStrs) in
+        (env, join ["(", strJoin ", " tyStrs, ")"])
+      else defaultPrint ()
+    else defaultPrint ()
   | FTyProj {target = target, label = label} ->
     match pprintType indent env target with (env, target) in
     match futPprintLabelString env label with (env, label) in
