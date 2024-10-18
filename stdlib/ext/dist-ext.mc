@@ -176,7 +176,7 @@ let betabinLogPmf:Int -> Float -> Float -> Int -> Float = lam n. lam a. lam b. l
   let lcomb = (logCombination n x) in
   addf lcomb (subf lbeta1 lbeta2)
 
-let betabinPmf = lam n:Int. lam a: Float. lam b: Float. lam x:Float.
+let betabinPmf = lam n:Int. lam a: Float. lam b: Float. lam x:Int.
   exp (betabinLogPmf n a b x)
 
 -- Seed
