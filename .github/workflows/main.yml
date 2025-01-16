@@ -76,6 +76,7 @@ jobs:
           ln -s $(brew --prefix gcc)/lib/gcc/current/libquadmath.0.dylib $(brew --prefix openblas)/lib
 
           # Install all opam packages used in make test
+          export CC=$(brew --prefix gcc)
           opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.24.1
 
       - name: Build Miking
