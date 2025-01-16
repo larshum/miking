@@ -2,6 +2,8 @@ name: Miking CI
 
 on:
   workflow_dispatch:
+  push:
+    branches: [develop]
   pull_request:
     branches: [master, develop]
     types: [opened, reopened, synchronize]
@@ -14,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install OCaml and opam for Miking
-        uses: ocaml/setup-ocaml@v2
+        uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: ocaml-base-compiler.5.0.0
 
@@ -51,7 +53,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install OCaml and opam for Miking
-        uses: ocaml/setup-ocaml@v2
+        uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: ocaml-base-compiler.5.0.0
 
