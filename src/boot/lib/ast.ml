@@ -222,6 +222,7 @@ and const =
   | CbootParserGetListLength of tm option
   | CbootParserGetConst of tm option
   | CbootParserGetPat of tm option
+  | CbootParserGetCopat of tm option
   | CbootParserGetInfo of tm option
   (* External functions *)
   | CPy of tm Pyast.ext
@@ -237,6 +238,7 @@ and ptree =
   | PTreeProgram of program
   | PTreeTop of top
   | PTreeDecl of decl
+  | PTreeCopat of copat
 
 (* Terms in MLang *)
 and cdecl =
@@ -248,11 +250,20 @@ and cdecl =
 
 and param = Param of info * ustring * ty
 
+and decl_type = Base | SumExt
+
 and decl =
   (* TODO(?,?): Local? *)
-  | Data of info * ustring * int * cdecl list
-  | Inter of info * ustring * ty * param list option * (pat * tm) list
+  | Data of info * ustring * int * cdecl list * decl_type
+  (* If no global extension is given, the last ty fields will be a unit type. *)
+  | DataProdExt of info * ustring * int * cdecl list * ty
+  | Inter of
+      info * ustring * ty * param list option * (pat * tm) list * decl_type
   | Alias of info * ustring * ustring list * ty
+  (* The fields in order represent
+     Info, identifier, param list, type, isBase *)
+  | Cosyn of info * ustring * ustring list * ty * bool
+  | Cosem of info * ustring * param list * (copat * tm) list * bool * ty
 
 and with_kind = WithType | WithValue
 
@@ -337,6 +348,11 @@ and tm =
   | TmPreRun of info * int * tm
   (* Box *)
   | TmBox of info * (tm * env option) ref
+  (* Extensible Record Types *)
+  | TmRecType of info * ustring * ustring list * tm
+  | TmRecField of info * ustring * ty * tm
+  | TmRecCreation of info * ustring * tm Record.t
+  | TmRecExtend of info * tm * tm Record.t
 
 (* Kind of pattern name *)
 and patName =
@@ -369,6 +385,9 @@ and pat =
   | PatOr of info * pat * pat
   (* Not pattern *)
   | PatNot of info * pat
+
+(* Copatterns *)
+and copat = CopatRecord of info * ustring list
 
 (* Types *)
 (* NOTE(aathn, 2022-06-10): Types are not symbolized in boot *)
@@ -409,6 +428,14 @@ and ty =
   | TyCon of info * ustring * tycon_data option
   (* Type variables *)
   | TyVar of info * ustring
+  (* Qualified names in type annotations *)
+  | TyQualifiedName of
+      info
+      * bool
+      * ustring
+      * ustring
+      * (ustring * ustring) list
+      * (ustring * ustring) list
   (* Type application *)
   | TyApp of info * ty * ty
   (* Type-level use *)
@@ -469,6 +496,17 @@ let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
       f acc t |> fun (acc, t') -> (acc, TmRecordUpdate (fi, r', l, t'))
   | TmType (fi, x, params, ty, t) ->
       f acc t |> fun (acc, t') -> (acc, TmType (fi, x, params, ty, t'))
+  | TmRecType (fi, name, params, t) ->
+      f acc t |> fun (acc, t') -> (acc, TmRecType (fi, name, params, t'))
+  | TmRecField (fi, name, ty, t) ->
+      f acc t |> fun (acc, t') -> (acc, TmRecField (fi, name, ty, t'))
+  | TmRecCreation (fi, name, r) ->
+      let acc, r' = Record.map_fold (fun _ t acc -> f acc t) r acc in
+      (acc, TmRecCreation (fi, name, r'))
+  | TmRecExtend (fi, e, r) ->
+      let acc, e' = f acc e in
+      let acc, r' = Record.map_fold (fun _ t acc -> f acc t) r acc in
+      (acc, TmRecExtend (fi, e', r'))
   | TmConDef (fi, x, s, ty, t) ->
       f acc t |> fun (acc, t') -> (acc, TmConDef (fi, x, s, ty, t'))
   | TmConApp (fi, k, s, t) ->
@@ -538,6 +576,9 @@ let smap_accum_left_tm_ty (f : 'a -> ty -> 'a * ty) (acc : 'a) : tm -> 'a * tm
   | TmExt (fi, name, sym, side, ty, tm) ->
       let acc, ty = f acc ty in
       (acc, TmExt (fi, name, sym, side, ty, tm))
+  | TmRecField (fi, name, ty, inexpr) ->
+      let acc, ty = f acc ty in
+      (acc, TmRecField (fi, name, ty, inexpr))
   | ( TmVar _
     | TmApp _
     | TmConst _
@@ -554,6 +595,9 @@ let smap_accum_left_tm_ty (f : 'a -> ty -> 'a * ty) (acc : 'a) : tm -> 'a * tm
     | TmTensor _
     | TmDive _
     | TmPreRun _
+    | TmRecType _
+    | TmRecCreation _
+    | TmRecExtend _
     | TmBox _ ) as tm ->
       (acc, tm)
 
@@ -596,6 +640,7 @@ let smap_accum_left_ty_ty (f : 'a -> ty -> 'a * ty) (acc : 'a) : ty -> 'a * ty
     | TyChar _
     | TyVariant _
     | TyCon _
+    | TyQualifiedName _
     | TyVar _ ) as ty ->
       (acc, ty)
 
@@ -714,7 +759,11 @@ let tm_info = function
   | TmDive (fi, _, _)
   | TmPreRun (fi, _, _)
   | TmBox (fi, _)
-  | TmExt (fi, _, _, _, _, _) ->
+  | TmExt (fi, _, _, _, _, _)
+  | TmRecType (fi, _, _, _)
+  | TmRecField (fi, _, _, _)
+  | TmRecCreation (fi, _, _)
+  | TmRecExtend (fi, _, _) ->
       fi
 
 let pat_info = function
@@ -746,7 +795,8 @@ let ty_info = function
   | TyCon (fi, _, _)
   | TyVar (fi, _)
   | TyUse (fi, _, _)
-  | TyApp (fi, _, _) ->
+  | TyApp (fi, _, _)
+  | TyQualifiedName (fi, _, _, _, _, _) ->
       fi
 
 (* Checks if a constant _may_ have a side effect. It is conservative
@@ -894,6 +944,7 @@ let const_has_side_effect = function
   | CbootParserGetListLength _
   | CbootParserGetConst _
   | CbootParserGetPat _
+  | CbootParserGetCopat _
   | CbootParserGetInfo _ ->
       true
   (* External functions *)

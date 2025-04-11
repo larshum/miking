@@ -13,6 +13,7 @@
 
 include "error.mc"
 include "math.mc"
+include "tuple.mc"
 include "seq.mc"
 
 include "mexpr/annotate.mc"
@@ -31,7 +32,18 @@ include "mexpr/type.mc"
 include "mexpr/unify.mc"
 include "mexpr/repr-ast.mc"
 
+include "extrec/ast.mc"
+
 type ReprSubst = use Ast in {vars : [Name], pat : Type, repr : Type}
+
+type ExtRecDefs = use Ast in Map Name (Map String (Name, Type))
+type ExtRecEnvType = {
+  defs : ExtRecDefs,
+  tyDeps : Map Name (Set Name),
+  labelTyDeps : Map Name (Map String (Set Name)),
+  sumTypeNames : Set Name,
+  payloadNames : Set Name
+}
 
 type TCEnv = {
   -- Normal typechecking related fields
@@ -47,6 +59,8 @@ type TCEnv = {
   currentLvl : Level, -- The current nesting level of binder bodies
   disableRecordPolymorphism : Bool,
   disableConstructorTypes : Bool,
+
+  extRecordType : ExtRecEnvType,
 
   -- Reptypes relevant fields
   reptypes : {
@@ -64,7 +78,7 @@ type TCEnv = {
   }
 }
 
-let typcheckEnvEmpty = {
+let typcheckEnvEmpty : TCEnv = {
   varEnv = mapEmpty nameCmp,
   conEnv = mapEmpty nameCmp,
   tyVarEnv = mapEmpty nameCmp,
@@ -73,6 +87,13 @@ let typcheckEnvEmpty = {
   conDeps  = mapEmpty nameCmp,
   matches  = [mapEmpty nameCmp],
   matchVars = mapEmpty nameCmp,
+  extRecordType = {
+    defs = mapEmpty nameCmp,
+    tyDeps = mapEmpty nameCmp,
+    labelTyDeps = mapEmpty nameCmp,
+    sumTypeNames = setEmpty nameCmp,
+    payloadNames = setEmpty nameCmp
+  },
   matchLvl = 0,
   currentLvl = 0,
   disableRecordPolymorphism = true,
@@ -87,13 +108,13 @@ let typcheckEnvEmpty = {
   }
 }
 
-let typecheckEnvAddBuiltinTypes : TCEnv -> [(String, [String])] -> TCEnv
+let typecheckEnvAddBuiltinTypes : TCEnv -> [(String, Name, [String])] -> TCEnv
   = lam env. lam tys.
     { env with
       tyConEnv =
         foldl
           (lam env. lam t.
-            mapInsert (nameNoSym t.0) (0, map nameSym t.1, tyvariant_ []) env)
+            mapInsert t.1 (0, map nameSym t.2, tyvariant_ []) env)
           env.tyConEnv tys }
 
 let typcheckEnvDefault =
@@ -172,7 +193,8 @@ end
 -- TYPE UNIFICATION --
 ----------------------
 
-lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + DataKindAst + PrettyPrint + Cmp + RepTypesHelpers
+lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + DataKindAst +
+               PrettyPrint + MExprCmp + RepTypesHelpers + VarTypeAst
   -- Unify the types `ty1' and `ty2', where
   -- `ty1' is the expected type of an expression, and
   -- `ty2' is the inferred type of the expression.
@@ -276,7 +298,8 @@ lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + DataKindAst + PrettyPrint
           switch ty
           case TyAlias x then
             let acc = {acc with aliases = mapInsert x.display x.content acc.aliases} in
-            collectAliasesAndKinds (collectAliasesAndKinds acc x.display) x.content
+            let acc = collectAliasesAndKinds acc x.display in
+            collectAliasesAndKinds acc x.content
           case TyMetaVar x then
             switch deref x.contents
             case Unbound u then
@@ -285,7 +308,10 @@ lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + DataKindAst + PrettyPrint
             case Link ty then
               collectAliasesAndKinds acc ty
             end
-          case _ then sfold_Type_Type collectAliasesAndKinds acc ty
+          case TyVar t then
+            acc
+          case other then
+            sfold_Type_Type collectAliasesAndKinds acc ty
           end
     in
     let res =
@@ -609,7 +635,8 @@ let _computeUniverse : TCEnv -> Name -> Map Name (Set Name) =
 -- NOTE(aathn, 2023-05-10): In the future, this should be replaced
 -- with something which also performs a proper kind check.
 lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
-  UnknownTypeAst + DataTypeAst + DataKindAst + FunTypeAst + VarTypeSubstitute + AppTypeUtils
+  UnknownTypeAst + DataTypeAst + DataKindAst + FunTypeAst + VarTypeSubstitute +
+  AppTypeUtils + QualifiedTypeAst + MExprPrettyPrint
   sem resolveType : Info -> TCEnv -> Bool -> Type -> Type
   sem resolveType info env closeDatas =
   | (TyCon _ | TyApp _) & ty ->
@@ -663,7 +690,11 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
   -- If we encounter a TyAlias, it means that the type was already processed by
   -- a previous call to typeCheck.
   | TyAlias t -> TyAlias t
-
+  | TyQualifiedName t & ty ->
+    errorSingle [t.info] (join [
+      " * Encountered a qualified name during type checking.\n",
+      " * These types should have been resolved before type checking!"
+    ])
   | ty ->
     smap_Type_Type (resolveType info env closeDatas) ty
 end
@@ -739,7 +770,9 @@ lang TypeCheck = TCUnify + Generalize + RemoveMetaVar
   sem typeCheckExpr : TCEnv -> Expr -> Expr
   sem typeCheckExpr env =
   | tm ->
-    dprint tm; print "\n"; error ""
+    dprint tm;
+    print "\n";
+    error "Unmatched term expression in 'typeCheckExpr'"
 end
 
 lang PatTypeCheck = TCUnify
@@ -1343,6 +1376,10 @@ lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst
     let bindingTypes = mapMap tyTm bindings in
     let ty = TyRecord {fields = bindingTypes, info = t.info} in
     TmRecord {t with bindings = bindings, ty = ty}
+end
+
+lang RecordUpdateTypeCheck = TypeCheck + RecordAst + RecordTypeAst
+  sem typeCheckExpr env =
   | TmRecordUpdate t ->
     let rec = typeCheckExpr env t.rec in
     let value = typeCheckExpr env t.value in
@@ -1384,7 +1421,7 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
         else
           recursive let substituteData = lam v. lam acc. lam x.
             switch x
-            case TyCon (t & {data = TyUnknown _}) then
+            case TyCon t then
               (setInsert t.ident acc, TyCon { t with data = v })
             case TyAlias t then
               match substituteData v acc t.content with (acc, content) in
@@ -1415,6 +1452,9 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
     let tyIdent = substituteNewReprs env tyIdent in
     match _makeConstructorType t.info env.disableConstructorTypes t.ident tyIdent
     with (target, tydeps, tyIdent) in
+
+    -- printLn (type2str tyIdent);
+
     let tydeps =
       mapInsert target tydeps
         (setFold (lam m. lam t. mapInsert t (setOfSeq nameCmp [target]) m)
@@ -1435,17 +1475,20 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
     let body = typeCheckExpr env t.body in
     match mapLookup t.ident env.conEnv with Some (_, lty) then
       let lty =
-        if env.disableConstructorTypes then lty
+        if env.disableConstructorTypes then
+          lty
         else
           match lty with TyAll (r & {kind = Data d}) then
             let types = mapMap (lam ks. {ks with lower = setInsert t.ident ks.lower}) d.types in
             TyAll {r with kind = Data {d with types = types}}
-          else error "Invalid constructor type in typeCheckExpr!"
+          else
+            errorSingle [t.info] "Invalid constructor type in typeCheckExpr!"
       in
       match inst t.info env.currentLvl lty with TyArrow {from = from, to = to} then
         unify env [infoTm body] from (tyTm body);
         TmConApp {t with body = body, ty = to}
-      else error "Invalid constructor type in typeCheckExpr!"
+      else
+        errorSingle [t.info] "Invalid constructor type in typeCheckExpr!"
     else
       let msg = join [
         "* Encountered an unbound constructor: ",
@@ -1561,6 +1604,12 @@ lang NeverTypeCheck = TypeCheck + NeverAst + IsEmpty
         ] in
         errorSingle [t.info] msg
       end
+end
+
+lang PlaceholderTypeCheck = TypeCheck + PlaceholderAst
+  sem typeCheckExpr env =
+  | TmPlaceholder t ->
+    TmPlaceholder {t with ty = newpolyvar env.currentLvl t.info}
 end
 
 lang ExtTypeCheck = TypeCheck + ExtAst + ResolveType
@@ -1725,7 +1774,7 @@ lang MExprTypeCheckMost =
   -- Terms
   AppTypeCheck + MatchTypeCheck + ConstTypeCheck + SeqTypeCheck +
   RecordTypeCheck + TypeTypeCheck + DataTypeCheck + UtestTypeCheck +
-  NeverTypeCheck + ExtTypeCheck +
+  NeverTypeCheck + ExtTypeCheck + PlaceholderTypeCheck +
 
   -- Patterns
   NamedPatTypeCheck + SeqTotPatTypeCheck + SeqEdgePatTypeCheck +
@@ -1741,10 +1790,10 @@ lang MExprTypeCheckMost =
   MetaVarTypeCmp + MetaVarTypeEq + MetaVarTypePrettyPrint
 end
 
-lang MExprTypeCheck = MExprTypeCheckMost + MExprTypeCheckLamLetVar
+lang MExprTypeCheck = MExprTypeCheckMost + MExprTypeCheckLamLetVar + RecordUpdateTypeCheck
 end
 
-lang RepTypesTypeCheck = OpDeclTypeCheck + ReprDeclTypeCheck + OpVarTypeCheck + OpImplTypeCheck + RepTypesUnify
+lang RepTypesTypeCheck = OpDeclTypeCheck + ReprDeclTypeCheck + OpVarTypeCheck + OpImplTypeCheck + RepTypesUnify + RecordUpdateTypeCheck
 end
 
 -- NOTE(vipa, 2022-10-07): This can't use AnnotateMExprBase because it

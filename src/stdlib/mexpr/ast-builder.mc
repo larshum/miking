@@ -8,6 +8,9 @@ include "error.mc"
 include "stringid.mc"
 include "map.mc"
 
+-- Info
+let noinfo_ = NoInfo ()
+
 -- Types --
 
 let ityint_ = use IntTypeAst in
@@ -119,6 +122,11 @@ let ntycon_ = lam n.
 
 let tycon_ = lam s.
   ntycon_ (nameNoSym s)
+
+let intyvar_ = use VarTypeAst in
+  lam i. lam n.
+    TyVar {ident = n,
+           info = i}
 
 let ntyvar_ = use VarTypeAst in
   lam n.
@@ -347,7 +355,8 @@ let pnot_ = use MExprAst in
 -- Terms --
 -- Methods of binding an expression into a chain of lets/reclets/condefs --
 
-recursive let bindF_ = use MExprAst in
+recursive let bindF_ = 
+  use MExprAst in
   lam f : Expr -> Expr -> Expr. lam letexpr. lam expr.
   match letexpr with TmLet t then
     TmLet {t with inexpr = bindF_ f t.inexpr expr}
@@ -594,6 +603,18 @@ let record_ = tmRecord (NoInfo ())
 
 let urecord_ = record_ tyunknown_
 
+let autoty_record_ = lam bindings.
+  use MExprAst in
+  let bindings = mapFromSeq cmpSID (map (lam x. (stringToSid x.0, x.1)) bindings) in
+  TmRecord {
+    bindings = bindings,
+    ty = TyRecord {
+      fields = mapMap tyTm bindings,
+      info = NoInfo ()
+    },
+    info = NoInfo ()
+  }
+
 let tmTuple = use MExprAst in
   lam info : Info. lam ty : Type. lam tms : [Expr].
   tmRecord info ty (mapi (lam i. lam t. (int2string i, t)) tms)
@@ -601,6 +622,8 @@ let tmTuple = use MExprAst in
 let tuple_ = tmTuple (NoInfo ())
 
 let utuple_ = tuple_ tyunknown_
+
+let autoty_tuple_ = lam tms. autoty_record_ (mapi (lam i. lam t. (int2string i, t)) tms)
 
 let urecord_empty = uunit_
 let record_empty = unit_
@@ -640,6 +663,9 @@ let record2tuple
 let never_ = use MExprAst in
   TmNever {ty = tyunknown_, info = NoInfo ()}
 
+let inever_ = use MExprAst in 
+  lam i : Info. TmNever {ty = tyunknown_, info = i}
+
 -- Exhaustive match
 let matchex_ = use MExprAst in
   lam target. lam pat. lam thn.
@@ -658,7 +684,7 @@ let nrecordproj_ = use MExprAst in
   -- It is fine to use any variable name here. It doesn't matter if it
   -- overwrites a previous binding, since that binding will never be used in
   -- the then clause in any case.
-  match_ r (prec_ [(key,npvar_ name)]) (nvar_ name) never_
+  match_ r (withTypePat (tyTm r) (prec_ [(key,npvar_ name)])) (nvar_ name) never_
 
 let recordproj_ = use MExprAst in
   lam key. lam r.

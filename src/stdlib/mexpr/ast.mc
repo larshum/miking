@@ -627,7 +627,7 @@ lang MatchAst = Ast
              thn    : Expr,
              els    : Expr,
              ty     : Type,
-             info     : Info}
+             info   : Info}
 
   syn Pat =
   -- Intentionally left blank
@@ -720,6 +720,25 @@ lang NeverAst = Ast
 
   sem withType (ty : Type) =
   | TmNever t -> TmNever {t with ty = ty}
+end
+
+-- TmPlaceholder --
+lang PlaceholderAst = Ast
+  syn Expr = 
+  | TmPlaceholder {ty : Type,
+                   info : Info}
+
+  sem infoTm = 
+  | TmPlaceholder t -> t.info
+
+  sem withInfo info = 
+  | TmPlaceholder t -> TmPlaceholder {t with info = info}
+
+  sem tyTm =
+  | TmPlaceholder t -> t.ty
+
+  sem withType ty = 
+  | TmPlaceholder t -> TmPlaceholder {t with ty = ty}
 end
 
 -- TmExt --
@@ -948,6 +967,11 @@ lang RefOpAst = ConstAst
   | CDeRef {}
 end
 
+lang TypeOpAst = ConstAst 
+  syn Const =
+  | CTypeOf {}
+end
+
 lang TensorOpAst = ConstAst
   syn Const =
   | CTensorCreateUninitInt {}
@@ -988,6 +1012,7 @@ lang BootParserAst = ConstAst
   | CBootParserGetListLength {}
   | CBootParserGetConst {}
   | CBootParserGetPat {}
+  | CBootParserGetCopat {}
   | CBootParserGetInfo {}
 end
 
@@ -1590,6 +1615,7 @@ lang MExprAst =
   -- Terms
   VarAst + AppAst + LamAst + RecordAst + LetAst + TypeAst + RecLetsAst +
   ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst + ExtAst +
+  PlaceholderAst +
 
   -- Constants
   IntAst + ArithIntAst + ShiftIntAst + FloatAst + ArithFloatAst + BoolAst +
@@ -1597,7 +1623,7 @@ lang MExprAst =
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
   FloatStringConversionAst + TimeAst + ConTagAst + RefOpAst + TensorOpAst +
-  BootParserAst + UnsafeCoerceAst +
+  BootParserAst + UnsafeCoerceAst + TypeOpAst + 
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +
@@ -1606,7 +1632,8 @@ lang MExprAst =
   -- Types
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst +
-  DataTypeAst + VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst + AliasTypeAst +
+  DataTypeAst + VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst + 
+  AliasTypeAst +  
 
   -- Kinds
   PolyKindAst + MonoKindAst + RecordKindAst + DataKindAst

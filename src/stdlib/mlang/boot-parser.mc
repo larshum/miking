@@ -23,7 +23,7 @@ include "seq.mc"
 include "option.mc"
 include "result.mc"
 
-lang BootParserMLang = BootParser + MLangAst
+lang BootParserMLang = BootParser + MLangAst + CosemDeclAst
   sem parseMLangFile : all a. String -> Result a (Info, String) MLangProgram
   sem parseMLangFile =| filepath ->
     let p = bootParserParseMLangFile filepath in
@@ -93,6 +93,27 @@ lang BootParserMLang = BootParser + MLangAst
     match foldl work ([], mapEmpty cmpString) decls with (res, m) in
     concat res (mapValues m)
 
+  sem mergeCosems : [Decl] -> [Decl]
+  sem mergeCosems =| decls ->
+    let work = lam acc : ([Decl], Map String Decl). lam decl : Decl. 
+      match acc with (res, m) in 
+      match decl with DeclCosem s1 then 
+        let str = nameGetStr s1.ident in 
+        match mapLookup str m with Some (DeclCosem s2) then
+          match s1.tyAnnot with TyUnknown _ then
+            let m = mapRemove str m in 
+            (res, mapInsert str (DeclCosem {s1 with tyAnnot = s2.tyAnnot}) m)
+          else 
+            let m = mapRemove str m in 
+            (res, mapInsert str (DeclCosem {s1 with args = s2.args, cases = s2.cases}) m)
+        else 
+          (res, mapInsert str decl m)
+      else 
+        (cons decl res, m)
+    in 
+    match foldl work ([], mapEmpty cmpString) decls with (res, m) in 
+    concat res (mapValues m)
+
 
   sem matchDecl : Unknown -> Int -> Decl
   sem matchDecl d =
@@ -100,21 +121,28 @@ lang BootParserMLang = BootParser + MLangAst
     let nCons = glistlen d 0 in
     let nParams = if eqi nCons 0 then 0 else glistlen d 1 in
 
-    let parseCon = lam i.
-      let ident = gname d (addi i 1) in
-      let ty = gtype d i in
-      {ident = ident, tyIdent = ty}
-    in
+    let parseCon = lam i. 
+      let ident = gname d (addi i 1) in 
+      let ty = gtype d i in 
+      let tyName = nameNoSym (concat (gstr d (addi i 1)) "Type") in 
+      {ident = ident, tyIdent = ty, tyName = tyName}
+    in 
+
+    let kind = switch gint d 0 
+      case 0 then base_kind_ 
+      case 1 then sumext_kind_ 
+    end in 
 
     DeclSyn {ident = gname d 0,
              includes = [],
              defs = map parseCon (range 0 nCons 1),
              params = map (lam i. gname d (addi (addi 1 nCons) i)) (range 0 nParams 1),
-             info = ginfo d 0}
-  | 703 ->
-    let nCases = glistlen d 0 in
-    let nArgs = glistlen d 1 in
-    let parseCase = lam i.
+             info = ginfo d 0,
+             declKind = kind}
+  | 703 -> 
+    let nCases = glistlen d 0 in 
+    let nArgs = glistlen d 1 in 
+    let parseCase = lam i. 
       {pat = gpat d i, thn = gterm d i}
     in
     let parseArg = (lam i. {ident = gname d i, tyAnnot = gtype d i}) in
@@ -125,13 +153,19 @@ lang BootParserMLang = BootParser + MLangAst
       Some (map (lam i. {ident = gname d i, tyAnnot = gtype d i}) (range 1 (addi 1 nArgs) 1))
     in
 
+    let kind = switch gint d 0 
+      case 0 then base_kind_ 
+      case 1 then sumext_kind_ 
+    end in 
+
     DeclSem {ident = gname d 0,
              tyAnnot = gtype d 0,
              tyBody = tyunknown_,
              args = args,
              cases = map parseCase (range 0 nCases 1),
              includes = [],
-             info = ginfo d 0}
+             info = ginfo d 0,
+             declKind = kind}
   | 705 ->
     DeclType {ident = gname d 0,
               params = map (gname d) (range 1 (addi 1 (glistlen d 0)) 1),
@@ -151,8 +185,10 @@ lang BootParserMLang = BootParser + MLangAst
       matchDecl a (bootParserGetId a)
     in
 
-    let decls = map parseDecl (range 0 nDecls 1) in
-    let decls = reverse (mergeSems decls) in
+    let decls = map parseDecl (range 0 nDecls 1) in 
+    let decls = reverse (mergeSems decls) in 
+    let decls = reverse (mergeCosems decls) in 
+
 
 
     DeclLang {ident = gname d 0,
@@ -293,7 +329,7 @@ utest optionIsNone d.tusing with true in
 match get p.decls 1 with DeclUtest d in
 utest d.test with int_ 12 using eqExpr in
 utest optionIsSome d.tusing with true in
--- printLn (mlang2str p) ;
+printLn (mlang2str p) ;
 
 -- Test empty language
 let str = strJoin "\n" [
@@ -529,5 +565,26 @@ let p = parseProgram str in
 match head p.decls with DeclLang l in
 match head l.decls with DeclSem f in
 match optionIsNone f.args with true in
+
+-- Test syn sum extension
+let str = strJoin "\n" [
+  "lang Base",
+  "  syn S = ",
+  "  | Foo {y : Int}",
+  "  | Bar {z : String}",
+  "  sem f x = ",
+  "  | _ -> 0",
+  "end",
+  "lang SumExt",
+  "  syn S += ",
+  "  | Baz {y : Int}",
+  "  sem f x += ",
+  "  | 10 -> 10",
+  "end",
+  "mexpr",
+  "()"
+] in
+let p = parseProgram str in 
+-- printLn (mlang2str p) ;
 
 ()

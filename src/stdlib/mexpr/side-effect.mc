@@ -62,6 +62,7 @@ end
 
 lang ConstSideEffect = ConstSideEffectBase + MExprAst
   sem constHasSideEffect =
+  | CTypeOf _ -> false
   | CInt _ | CFloat _ | CBool _ | CChar _ -> false
   | CAddi _ | CSubi _ | CMuli _ | CDivi _ | CNegi _ | CModi _ -> false
   | CSlli _ | CSrli _ | CSrai _ -> false
@@ -98,6 +99,7 @@ lang ConstSideEffect = ConstSideEffectBase + MExprAst
   | CBootParserGetId _ | CBootParserGetTerm _ | CBootParserGetType _
   | CBootParserGetString _ | CBootParserGetInt _ | CBootParserGetFloat _
   | CBootParserGetListLength _ | CBootParserGetConst _ | CBootParserGetPat _
+  | CBootParserGetCopat _ 
   | CBootParserGetInfo _ -> true
 end
 

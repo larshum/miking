@@ -2,6 +2,8 @@
 -- the type checker.
 
 include "result.mc"
+include "set.mc"
+include "map.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
@@ -221,6 +223,7 @@ lang BaseKindUnify = Unify + PolyKindAst + MonoKindAst
   | (Mono _, Poly _ | Mono _) ->
     (u.empty, Mono ())
 end
+
 
 lang RecordKindUnify = UnifyRecords + RecordKindAst
   sem unifyKinds u env =

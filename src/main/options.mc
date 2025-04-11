@@ -14,6 +14,7 @@ let optionsDefault : Options = {
   debugShallow = false,
   debugConstantFold = false,
   debugPhases = false,
+  debugDumpPhases = setEmpty cmpString,
   exitBefore = false,
   disablePruneExternalUtests = false,
   disablePruneExternalUtestsWarning = false,
@@ -38,7 +39,9 @@ let optionsDefault : Options = {
   disableJsTCO = false,
   output = None (),
   tuneOptions = tuneOptionsDefault,
-  mlangPipeline = false
+  mlangPipeline = false,
+  experimentalRecords = false,
+  disableStrictSumExtension = false
 }
 
 -- Get the help string for options

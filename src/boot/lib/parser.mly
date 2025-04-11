@@ -1,4 +1,3 @@
-
 /*
    Miking is licensed under the MIT license.
    Copyright (C) David Broman. See file LICENSE.txt
@@ -69,7 +68,9 @@
 %token <unit Ast.tokendata> IN
 %token <unit Ast.tokendata> END
 %token <unit Ast.tokendata> SYN
+%token <unit Ast.tokendata> COSYN
 %token <unit Ast.tokendata> SEM
+%token <unit Ast.tokendata> COSEM
 %token <unit Ast.tokendata> USE
 %token <unit Ast.tokendata> MEXPR
 %token <unit Ast.tokendata> INCLUDE
@@ -81,7 +82,14 @@
 %token <unit Ast.tokendata> ALL
 %token <unit Ast.tokendata> DIVE
 %token <unit Ast.tokendata> PRERUN
-
+/* Extensible record type keywords */
+%token <unit Ast.tokendata> EXTEND
+%token <unit Ast.tokendata> NOTHING
+%token <unit Ast.tokendata> RECTYPE
+%token <unit Ast.tokendata> FIELD
+%token <unit Ast.tokendata> OF
+%token <unit Ast.tokendata> ATLEAST
+%token <unit Ast.tokendata> ATMOST
 
 /* Types */
 %token <unit Ast.tokendata> TUNKNOWN
@@ -93,8 +101,12 @@
 %token <unit Ast.tokendata> TTENSOR
 
 %token <unit Ast.tokendata> EQ            /* "="   */
+%token <unit Ast.tokendata> PLUSEQ        /* "+="   */
+%token <unit Ast.tokendata> TIMESEQ       /* "*="   */
 %token <unit Ast.tokendata> ARROW         /* "->"  */
+%token <unit Ast.tokendata> LARROW        /* "<-"  */
 %token <unit Ast.tokendata> ADD           /* "+"   */
+%token <unit Ast.tokendata> SUB           /* "-"   */
 
 
 /* Symbolic Tokens */
@@ -275,18 +287,52 @@ decls:
   |
     { [] }
 decl:
+  // Cosyn definition
+  | COSYN type_ident type_params cosyn_symbol ty
+    { let fi = mkinfo $1.i (ty_info $5) in 
+      Cosyn (fi, $2.v, $3, $5, $4)}
+  // Cosem definition
+  | COSEM var_ident params EQ cosem_cases
+    { let fi = mkinfo $1.i $4.i in
+      Cosem (fi, $2.v, $3, $5, true, TyUnknown fi) }
+  // Cosem extension
+  | COSEM var_ident params TIMESEQ cosem_cases
+    { let fi = mkinfo $1.i $4.i in
+      Cosem (fi, $2.v, $3, $5, false, TyUnknown fi) }
+  // Cosem type annotation
+  | COSEM var_ident COLON ty
+    { Cosem (mkinfo $1.i (ty_info $4), $2.v, [], [], true, $4) }
+  // Syn base definition
   | SYN type_ident type_params EQ constrs
     { let fi = mkinfo $1.i $4.i in
-      Data (fi, $2.v, List.length $3, List.map (set_con_params $3) $5) }
+      Data (fi, $2.v, List.length $3, List.map (set_con_params $3) $5, Base) }
+  // Syn sum extension
+  | SYN type_ident type_params PLUSEQ constrs
+    { let fi = mkinfo $1.i $4.i in
+      Data (fi, $2.v, List.length $3, List.map (set_con_params $3) $5, SumExt ) }
+  // Syn product extension
+  | SYN type_ident type_params TIMESEQ constr_params constrs
+    { let fi = mkinfo $1.i $4.i in
+      DataProdExt (fi, $2.v, List.length $3, List.map (set_con_params $3) $6, ($5 fi)) }
+  // Sem base definition 
   | SEM var_ident params EQ cases
     { let fi = mkinfo $1.i $4.i in
-      Inter (fi, $2.v, TyUnknown fi, Some $3, $5) }
+      Inter (fi, $2.v, TyUnknown fi, Some $3, $5, Base) }
+  // Sem sum extension
+  | SEM var_ident params PLUSEQ cases
+    { let fi = mkinfo $1.i $4.i in
+      Inter (fi, $2.v, TyUnknown fi, Some $3, $5, SumExt) }
+  // Sem type declaration
   | SEM var_ident COLON ty
     { let fi = mkinfo $1.i (ty_info $4) in
-      Inter (fi, $2.v, $4, None, []) }
+      Inter (fi, $2.v, $4, None, [], Base) }
   | TYPE type_ident type_params EQ ty
     { let fi = mkinfo $1.i $4.i in
       Alias (fi, $2.v, $3, $5) }
+
+cosyn_symbol: 
+  | EQ { true }
+  | TIMESEQ { false }
 
 constrs:
   | constr constrs
@@ -313,6 +359,16 @@ params:
       Param (fi, $1.v, TyUnknown fi) :: $2 }
   |
     { [] }
+
+cosem_cases: 
+  | cosem_case cosem_cases
+    { $1 :: $2 }
+  | 
+    { [] }
+
+cosem_case:
+  | BAR copat LARROW mexpr
+    { ($2, $4) }
 
 cases:
   | case cases
@@ -390,6 +446,12 @@ mexpr:
   | EXTERNAL ident NOT COLON ty IN mexpr
       { let fi = mkinfo $1.i (tm_info $7) in
         TmExt(fi,$2.v,Symb.Helpers.nosym,true,$5,$7) }
+  | RECTYPE type_ident type_params IN mexpr
+      { let fi = mkinfo $1.i $4.i in
+        TmRecType(fi, $2.v, $3, $5) }
+  | FIELD var_ident ty_op IN mexpr
+      { let fi = mkinfo $1.i $4.i in
+        TmRecField(fi, $2.v, $3 $1.i, $5)}
 
 lets:
   | LET var_ident ty_op EQ mexpr
@@ -456,6 +518,17 @@ atom:
       { List.fold_left (fun acc (k,v) ->
           TmRecordUpdate (mkinfo $1.i $5.i, acc, k, v)
         ) $2 $4}
+  // Non-Empty extensible record creation
+  | LBRACKET con_ident OF labels RBRACKET 
+      { TmRecCreation(mkinfo $1.i $5.i, $2.v, $4 |> List.fold_left
+        (fun acc (k,v) -> Record.add k v acc) Record.empty) }
+  // Empty extensible record creation
+  | LBRACKET con_ident OF NOTHING RBRACKET
+      { TmRecCreation(mkinfo $1.i $5.i, $2.v, Record.empty) }
+  | LBRACKET EXTEND mexpr WITH labels RBRACKET 
+    { let r = $5 |> List.fold_left
+        (fun acc (k,v) -> Record.add k v acc) Record.empty in 
+      TmRecExtend(mkinfo $1.i $6.i, $3, r) }
 
 proj_label:
   | INT
@@ -504,6 +577,11 @@ name:
     { ($1.i, NameStr($1.v,Symb.Helpers.nosym)) }
   | UNDERSCORE
     { ($1.i, NameWildcard) }
+
+copat: 
+  | LBRACKET separated_list(COMMA, var_ident) RBRACKET 
+    { CopatRecord (mkinfo $1.i $3.i, List.map (fun x -> x.v) $2) }
+
 
 pat:
   | pat_conj BAR pat
@@ -645,6 +723,38 @@ ty_ish_atom:
     { TyVar($1.i,$1.v) }
   | UNDERSCORE
     { TyVar($1.i, us"_") }
+  | atleast_atmost ident DCOLON ident
+    { let (b, fi) = $1 in
+      TyQualifiedName(mkinfo fi $4.i, b, $2.v, $4.v, [], []) }
+  | atleast_atmost LPAREN ident DCOLON ident plus_opt minus_opt RPAREN 
+    { let (b, fi) = $1 in
+      TyQualifiedName(mkinfo fi $8.i, b, $3.v, $5.v, $6, $7) }
+
+atleast_atmost:
+  | ATLEAST
+    { (false, $1.i) }
+  | ATMOST 
+    { (true, $1.i) }
+
+plus_opt: 
+  | 
+    { [] }
+  | ADD separated_list(COMMA, ident_colon_ident)
+    { $2 }
+
+minus_opt: 
+  | 
+    { [] }
+  | SUB separated_list(COMMA, ident_colon_ident)
+    { $2 }
+
+// plus_list:
+//   | separated_list(COMMA, ident_colon_ident)
+//     { $1 }
+
+ident_colon_ident:
+  | ident DCOLON ident
+    { ($1.v, $3.v) }
 
 %inline ty_data:
   | LBRACKET var_ident RBRACKET
@@ -675,6 +785,8 @@ type_with_cons:
     { ($1.v, $6, Some $4) }
 
 con_list:
+  | var_ident con_list
+    { $1.v :: $2 }
   | con_ident con_list
     { $1.v :: $2 }
   |

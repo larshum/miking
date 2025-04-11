@@ -33,7 +33,10 @@ let reserved_strings = [
   ("in",            fun(i) -> Parser.IN{i=i;v=()});
   ("end",           fun(i) -> Parser.END{i=i;v=()});
   ("syn",           fun(i) -> Parser.SYN{i=i;v=()});
+  ("cosyn",         fun(i) -> Parser.COSYN{i=i;v=()});
   ("sem",           fun(i) -> Parser.SEM{i=i;v=()});
+  ("cosem",         fun(i) -> Parser.COSEM{i=i;v=()});
+  ("nothing",       fun(i) -> Parser.NOTHING{i=i;v=()});
   ("use",           fun(i) -> Parser.USE{i=i;v=()});
   ("mexpr",         fun(i) -> Parser.MEXPR{i=i;v=()});
   ("include",       fun(i) -> Parser.INCLUDE{i=i;v=()});
@@ -45,6 +48,12 @@ let reserved_strings = [
   ("all",           fun(i) -> Parser.ALL{i=i;v=()});
   ("dive",          fun(i) -> Parser.DIVE{i=i;v=()});
   ("prerun",        fun(i) -> Parser.PRERUN{i=i;v=()});
+  ("extend",        fun(i) -> Parser.EXTEND{i=i;v=()});
+  ("rectype",       fun(i) -> Parser.RECTYPE{i=i;v=()});
+  ("recfield",      fun(i) -> Parser.FIELD{i=i;v=()});
+  ("of",            fun(i) -> Parser.OF{i=i;v=()});
+  ("atleast",       fun(i) -> Parser.ATLEAST{i=i;v=()});
+  ("atmost",        fun(i) -> Parser.ATMOST{i=i;v=()});
 
   (* Types *)
   ("Unknown",       fun(i) -> Parser.TUNKNOWN{i=i;v=()});
@@ -56,8 +65,11 @@ let reserved_strings = [
   ("Tensor",        fun(i) -> Parser.TTENSOR{i=i;v=()});
 
   (* v *)
+  ("+=",            fun(i) -> Parser.PLUSEQ{i=i;v=()});
+  ("*=",            fun(i) -> Parser.TIMESEQ{i=i;v=()});
   ("=",             fun(i) -> Parser.EQ{i=i;v=()});
   ("+",             fun(i) -> Parser.ADD{i=i;v=()});
+  ("-",             fun(i) -> Parser.SUB{i=i;v=()});
   ("++",            fun(i) -> Parser.CONCAT{i=i;v=()});
 
   (* Symbolic Tokens *)
@@ -77,6 +89,7 @@ let reserved_strings = [
   ("!",             fun(i) -> Parser.NOT{i=i;v=()});
   ("_",             fun(i) -> Parser.UNDERSCORE{i=i;v=()});
   ("->",            fun(i) -> Parser.ARROW{i=i;v=()});
+  ("<-",            fun(i) -> Parser.LARROW{i=i;v=()});
   (">",             fun(i) -> Parser.GREATER{i=i;v=()});
   ("<",             fun(i) -> Parser.LESS{i=i;v=()});
 ]
@@ -170,8 +183,8 @@ let ident = ('_'| lcase_letter) (digit | '_' | us_letter)*
 let uident = ucase_letter (digit | '_' | us_letter)*
 
 let symtok =  "="  | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">=" | "<<" | ">>" | ">>>" | "==" |
-              "!=" | "!" | "&&" | "||" | "++"| "$" | "("  | ")"  | "["  | "]" | "{"  | "}"  |
-              "::" | ":" | ","  | ";"  | "."  | "&" | "|" | "->" | "=>" | "++"
+              "!=" | "!" | "&&" | "||" | "++"| "$" | "("  | ")"  | "["  | "]" | "{"  | "}"  | "<-" |
+              "::" | ":" | ","  | ";"  | "."  | "&" | "|" | "->" | "=>" | "++" | "+=" | "*="
 
 let line_comment = "--" [^ '\013' '\010']*
 let unsigned_integer = digit+

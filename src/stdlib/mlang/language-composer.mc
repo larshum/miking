@@ -41,6 +41,9 @@
 include "ast.mc"
 include "ast-builder.mc"
 
+include "extrec/ast.mc"
+include "extrec/ast-builder.mc"
+
 include "mexpr/info.mc"
 
 -- include "set.mc"
@@ -52,27 +55,41 @@ include "name.mc"
 include "seq.mc"
 include "map.mc"
 
+lang ExtendedMLang = MLangAst + CosynDeclAst + CosemDeclAst end
+
 -- This info type contains a subset of the data in a DeclSem, DeclSyn, or DeclType.\
 -- Specifically, they contain the data required for the creation of explicit
 -- declarations for implicitly included syns and sems. We create a special
 -- DeclInfo type for this so that we do not have to carry around the constructors
 -- and cases.
 type DeclInfo
-con TypeInfo : use MLangAst in {ident : Name,
+con TypeInfo : use ExtendedMLang in {ident : Name,
                                 orig : String,
                                 info : Info} -> DeclInfo
-con SemInfo : use MLangAst in {ident : Name,
+con SemInfo : use ExtendedMLang in {ident : Name,
                                info : Info,
                                orig : String,
                                ty : Type,
                                args : Option [{ident : Name, tyAnnot: Type}]} -> DeclInfo
-con SynInfo : use MLangAst in {ident : Name,
+con SynInfo : use ExtendedMLang in {ident : Name,
                                info : Info,
                                orig : String,
                                params : [Name]} -> DeclInfo
+con ProdInfo : use ExtendedMLang in {ident : Name,
+                                info : Info,
+                                orig : String} -> DeclInfo
+con CosynInfo : use ExtendedMLang in {ident : Name,
+                                 info : Info, 
+                                 orig : String} -> DeclInfo 
+con CosemInfo : use ExtendedMLang in {ident : Name, 
+                                      info : Info,
+                                      orig : String,
+                                      tyAnnot : Type,
+                                      args : [{ident : Name, tyAnnot : Type}]} -> DeclInfo
 
 let decl2info = lam orig. lam d.
-  use MLangAst in 
+  use ExtendedMLang in 
+  use ExtRecAst in 
   switch d
     case DeclSem s then SemInfo {ident = s.ident,
                                  info = s.info,
@@ -86,17 +103,34 @@ let decl2info = lam orig. lam d.
     case DeclType t then TypeInfo {ident = t.ident,
                                    orig = orig,
                                    info = t.info}     
+    case SynDeclProdExt d then ProdInfo {ident = d.ident,
+                                        info = d.info,
+                                        orig = orig}
+    case DeclCosyn d then CosynInfo {ident = d.ident, 
+                                     info = d.info,
+                                     orig = orig}
+    case DeclCosem d then CosemInfo {ident = d.ident, 
+                                     info = d.info,
+                                     tyAnnot = d.tyAnnot,
+                                     orig = orig,
+                                     args = d.args}
   end                     
 
 let isTypeInfo = lam i. match i with TypeInfo _ then true else false
 let isSemInfo = lam i. match i with SemInfo _ then true else false
 let isSynInfo = lam i. match i with SynInfo _ then true else false
+let isProdInfo = lam i. match i with ProdInfo _ then true else false
+let isCosynInfo = lam i. match i with CosynInfo _ then true else false
+let isCosemInfo = lam i. match i with CosemInfo _ then true else false
+
 
 let extractInfoName : DeclInfo -> (Info, String) = lam info.
   switch info 
     case TypeInfo t then (t.info, nameGetStr t.ident)
     case SemInfo s then (s.info, nameGetStr s.ident)
     case SynInfo s then (s.info, nameGetStr s.ident)
+    case CosynInfo s then (s.info, nameGetStr s.ident)
+    case CosemInfo s then (s.info, nameGetStr s.ident)
   end
 
 let projIdent = lam info. 
@@ -104,6 +138,8 @@ let projIdent = lam info.
     case TypeInfo t then (t.orig, nameGetStr t.ident)
     case SemInfo t then (t.orig, nameGetStr t.ident)
     case SynInfo t then (t.orig, nameGetStr t.ident)
+    case CosynInfo t then (t.orig, nameGetStr t.ident)
+    case CosemInfo t then (t.orig, nameGetStr t.ident)
   end
 
 type ComposerContext = {
@@ -117,7 +153,7 @@ let emptyComposerContext : ComposerContext = {
 let ctxWithDeclInfo = lam ctx. lam s. lam declInfo.
   {ctx with langMap = mapInsert s declInfo ctx.langMap}
 
-lang LanguageComposer = MLangAst
+lang LanguageComposer = ExtendedMLang + ExtRecAst
   sem composeProgram : MLangProgram -> MLangProgram 
   sem composeProgram =| p ->
     let ctx = emptyComposerContext in 
@@ -133,10 +169,13 @@ lang LanguageComposer = MLangAst
     let synOrSemNames = mapOption 
       (lam d. match d with DeclSem {ident = ident} then Some ident 
               else match d with DeclSyn {ident = ident} then Some ident
+              else match d with SynDeclProdExt {ident = ident} then Some ident
+              -- else match d with DeclCosyn {ident = ident} then Some ident
+              else match d with DeclCosem {ident = ident} then Some ident
               else None ()) decls in 
     let synOrSemStrings = map nameGetStr synOrSemNames in 
 
-    match addImplicitIncludes (nameGetStr l.ident) includes synOrSemStrings ctx 
+    match addImplicitIncludes (nameGetStr l.ident) l.info includes synOrSemStrings ctx 
     with (ctx, generatedDecls) in 
 
     (ctx, DeclLang {l with decls = concat decls generatedDecls})
@@ -150,17 +189,34 @@ lang LanguageComposer = MLangAst
       mapLookup (incl, identStr) ctx.langMap in 
     let foundIncludes : [DeclInfo] = mapOption findMatchingInfo includes in 
     
-    let conflicts = filter (lam i. or (isTypeInfo i) (isSynInfo i)) foundIncludes in 
+    let conflicts = filter isCosemInfo foundIncludes in 
     let errors = cons (d.info, nameGetStr d.ident) (map extractInfoName conflicts) in 
 
     if not (null conflicts) then
-      errorMulti errors "The declared sem has an identifier that conflicts with included types!"
+      errorMulti errors "The declared sem has an identifier that conflicts with included cosems!"
     else
       let includedSems = filter isSemInfo foundIncludes in 
 
       let includes = map projIdent includedSems in 
       (ctxWithDeclInfo ctx (langStr, nameGetStr d.ident) (decl2info langStr decl), 
        DeclSem {d with includes = includes})
+  | decl & DeclCosem d ->
+    let identStr = nameGetStr d.ident in 
+    let findMatchingInfo : String -> Option DeclInfo = lam incl.
+      mapLookup (incl, identStr) ctx.langMap in 
+    let foundIncludes : [DeclInfo] = mapOption findMatchingInfo includes in 
+
+    let conflicts = filter isSemInfo foundIncludes in 
+    let errors = cons (d.info, nameGetStr d.ident) (map extractInfoName conflicts) in 
+
+    if not (null conflicts) then
+      errorMulti errors "The declared sem has an identifier that conflicts with included sems!"
+    else
+      let includedCosems = filter isCosemInfo foundIncludes in 
+
+      let includes = map projIdent includedCosems in 
+      (ctxWithDeclInfo ctx (langStr, nameGetStr d.ident) (decl2info langStr decl), 
+       DeclCosem {d with includes = includes})
   | decl & DeclSyn d ->
     let identStr = nameGetStr d.ident in 
     let findMatchingInfo : String -> Option DeclInfo = lam incl.
@@ -180,6 +236,25 @@ lang LanguageComposer = MLangAst
       let info = {ident = d.ident, info = d.info} in 
       (ctxWithDeclInfo ctx (langStr, nameGetStr d.ident) (decl2info langStr decl), 
        DeclSyn {d with includes = includes})
+  | decl & SynDeclProdExt d ->
+    let identStr = nameGetStr d.ident in 
+    let findMatchingInfo : String -> Option DeclInfo = lam incl.
+      mapLookup (incl, identStr) ctx.langMap in 
+    let foundIncludes : [DeclInfo] = mapOption findMatchingInfo includes in 
+    
+    let conflicts = filter isTypeInfo foundIncludes in 
+
+    let errors = cons (d.info, nameGetStr d.ident) (map extractInfoName conflicts) in 
+
+    if not (null conflicts) then
+      errorMulti errors "The declared syn has an identifier that conflicts with included types!"
+    else
+      let includedSyns = filter (lam i. or (isProdInfo i) (isSynInfo i)) foundIncludes in 
+
+      let includes = map projIdent includedSyns in 
+      let info = {ident = d.ident, info = d.info} in 
+      (ctxWithDeclInfo ctx (langStr, nameGetStr d.ident) (decl2info langStr decl), 
+       SynDeclProdExt {d with includes = includes})
   | decl & DeclType d -> 
     let identStr = nameGetStr d.ident in 
     let findMatchingInfo : String -> Option DeclInfo = lam incl.
@@ -193,21 +268,44 @@ lang LanguageComposer = MLangAst
     else
       let info = decl2info langStr decl in 
       (ctxWithDeclInfo ctx (langStr, nameGetStr d.ident) info, decl)
-  | _ -> error "Only Type, Syn, and Sem declarations can be contained inside of a langauge!"
+  | decl & DeclCosyn d -> 
+    let identStr = nameGetStr d.ident in 
+    let findMatchingInfo : String -> Option DeclInfo = lam incl.
+      mapLookup (incl, identStr) ctx.langMap in 
+    let foundIncludes : [DeclInfo] = mapOption findMatchingInfo includes in 
+    
+    let conflicts = filter (lam i. or (isTypeInfo i) (isSynInfo i)) foundIncludes in 
 
-  sem addImplicitIncludes langStr includes definedSynsSems =
+    let errors = cons (d.info, nameGetStr d.ident) (map extractInfoName conflicts) in 
+
+    if not (null conflicts) then
+      errorMulti errors "The declared syn has an identifier that conflicts with included types!"
+    else
+      let includedSyns = filter isSynInfo foundIncludes in 
+
+      let includes = map projIdent includedSyns in 
+      let info = {ident = d.ident, info = d.info} in 
+      (ctxWithDeclInfo ctx (langStr, nameGetStr d.ident) (decl2info langStr decl), 
+       DeclCosyn {d with includes = includes})
+  | decl -> 
+    -- (ctx, decl) 
+    error "Only Type, Syn, and Sem declarations can be contained inside of a langauge!"
+
+  sem addImplicitIncludes langStr langInfo includes definedSynsSems =
   | ctx ->
     let includeSet = setOfSeq cmpString includes in 
 
     -- We are going to include elements from ctx.langMap that
     -- (1) that are not Type declarations.
-    -- (2) belong to an included langauge
-    -- (3) that have not already been included explicitly through a syn or sem
+    -- (2) that are not Cosyn declarations
+    -- (3) belong to an included langauge
+    -- (4) that have not already been included explicitly through a syn or sem
     let pred = lam k. lam v. 
       match k with (origLang, ident) in 
-        (and (not (isTypeInfo v))
-             (and (setMem origLang includeSet)
-                  (not (seqMem eqString definedSynsSems ident))))
+        allb [not (isTypeInfo v),
+              not (isCosynInfo v),
+              setMem origLang includeSet,
+              not (seqMem eqString definedSynsSems ident)]
     in       
     let filteredCtx = mapFilterWithKey pred ctx.langMap in 
 
@@ -235,7 +333,8 @@ lang LanguageComposer = MLangAst
                               params = s.params,
                               defs = [],
                               includes = includes,
-                              info = s.info} in 
+                              info = langInfo,
+                              declKind = sumext_kind_} in 
           let info = decl2info langStr decl in 
           (ctxWithDeclInfo ctx (langStr, nameGetStr s.ident) info, decl)
         case SemInfo s then
@@ -252,10 +351,32 @@ lang LanguageComposer = MLangAst
                               args = args,
                               cases = [],
                               includes = includes,
-                              info = s.info} in 
+                              info = langInfo,
+                              declKind = sumext_kind_} in 
           let info = decl2info langStr decl in 
           (ctxWithDeclInfo ctx (langStr, nameGetStr s.ident) info, decl)
-        case _ then never
+        case CosemInfo s then
+          let include2args = lam incl.
+            match mapLookup incl ctx.langMap with Some info in 
+            match info with CosemInfo semInfo in
+            semInfo.args
+          in 
+          let includedArgs = map include2args includes in 
+          let args = head includedArgs in 
+          let decl = DeclCosem {ident = s.ident,
+                                args = args,
+                                cases = [],
+                                includes = includes,
+                                info = langInfo,
+                                isBase = false,
+                                tyAnnot = tyunknown_,
+                                targetTyIdent = nameSym ""} in 
+          let info = decl2info langStr decl in 
+          (ctxWithDeclInfo ctx (langStr, nameGetStr s.ident) info, decl)
+        case CosynInfo _ then 
+          error "Encountered unexpected cosyn!"
+        case _ then
+          error "Encountered unexpected info (wildcard match)!"
       end 
     in 
     mapAccumL gen ctx (mapValues toBeGenerated)
@@ -264,7 +385,7 @@ lang LanguageComposer = MLangAst
 end
 
 mexpr 
-use MLangAst in
+use ExtendedMLang in
 use LanguageComposer in 
 
 let p : MLangProgram = {
@@ -401,6 +522,60 @@ match head innerDecls with DeclSyn f12 in
 utest length f12.includes with 2 in 
 utest nameGetStr f12.ident with "S" in 
 
+-- Test cosem composition
+let p : MLangProgram = {
+  decls = [
+    decl_lang_ "L0" [
+      decl_cosem_ "f" [] [] true
+    ],
+    decl_langi_ "L1" ["L0"] [
+    ]
+  ],
+  expr = uunit_
+} in 
+let p = composeProgram p in 
+match get p.decls 1 with DeclLang {decls = decls} in 
+utest length decls with 1 in 
+
+-- Test cosem composition
+let p : MLangProgram = {
+  decls = [
+    decl_lang_ "L0" [
+      decl_cosem_ "f" [] [] true
+    ],
+    decl_langi_ "L1" ["L0"] [
+      decl_cosem_ "f" [] [] false
+    ]
+  ],
+  expr = uunit_
+} in 
+let p = composeProgram p in 
+match get p.decls 1 with DeclLang {decls = decls} in 
+utest length decls with 1 in 
+match head decls with DeclCosem d in
+utest d.includes with [("L0", "f")] using eqSeq (tupleEq2 eqString eqString) in 
+
+let p : MLangProgram = {
+    decls = [
+        decl_langi_ "L1" [] [
+            decl_cosem_ "f" [] [] true
+        ],
+        decl_langi_ "L2" [] [
+            decl_cosem_ "f" [] [] true
+        ],
+        decl_langi_ "L12" ["L1", "L2"] [
+          decl_cosem_ "f" [] [] false
+        ]        
+    ],
+    expr = bind_ (use_ "L2") (int_ 10)
+} in 
+let p = composeProgram p in
+match get p.decls 2 with DeclLang {decls = decls} in 
+utest length decls with 1 in 
+match head decls with DeclCosem d in
+utest length d.includes with 2 in 
+utest seqMem (tupleEq2 eqString eqString) d.includes ("L1", "f") with true in
+utest seqMem (tupleEq2 eqString eqString) d.includes ("L2", "f") with true in
 ()
 
 

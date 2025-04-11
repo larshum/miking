@@ -9,6 +9,7 @@
  *  Copyright (C) David Broman. See file LICENSE.txt *)
 
 open Ast
+open Msg
 open Format
 open Ustring.Op
 open Intrinsics
@@ -208,6 +209,9 @@ let rec ustring_of_ty = function
       pprint_type_str x
   | TyVar (_, x) ->
       pprint_var_str x
+  | TyQualifiedName (_, pos, n1, n2, _, _) ->
+      let s = if pos then ">" else "<" in
+      us s ^. pprint_type_str n1 ^. us "=>" ^. pprint_type_str n2
   | TyUse (_, lang, ty) ->
       us "use " ^. lang ^. us " in " ^. ustring_of_ty ty
   | TyApp (_, ty1, ty2) ->
@@ -553,6 +557,8 @@ let rec print_const fmt = function
       fprintf fmt "bootParserParseGetConst"
   | CbootParserGetPat _ ->
       fprintf fmt "bootParserParseGetPat"
+  | CbootParserGetCopat _ ->
+      fprintf fmt "bootParserParseGetCopat"
   | CbootParserGetInfo _ ->
       fprintf fmt "bootParserParseGetInfo"
   (* Python intrinsics *)
@@ -567,6 +573,15 @@ and print_record fmt r =
   in
   let inner = List.map print r in
   fprintf fmt "{@[<hov 0>%a@]}" concat (Comma, inner)
+
+(** Pretty print an extensible record *)
+and print_extrecord name fmt r =
+  let print (l, t) =
+    let l = string_of_ustring (pprint_label_str l) in
+    fun fmt -> fprintf fmt "%s = %a" l print_tm (App, t)
+  in
+  let inner = List.map print r in
+  fprintf fmt "{%s of @[<hov 0>%a@]}" name concat (Comma, inner)
 
 (** Print a term on the given formatter and within the given precedence. *)
 and print_tm fmt (prec, t) =
@@ -598,6 +613,10 @@ and print_tm fmt (prec, t) =
     | TmDive _
     | TmPreRun _
     | TmBox _
+    | TmRecType _
+    | TmRecField _
+    | TmRecCreation _
+    | TmRecExtend _
     | TmTensor _ ->
         Atom
   in
@@ -768,6 +787,21 @@ and print_tm' fmt t =
       let e = if e then "!" else "" in
       fprintf fmt "@[<hov 0>@[<hov %d>external %s %s : %s in@]@ %a@]"
         !ref_indent x e ty print_tm (Match, t)
+  | TmRecType (_, n, _, tm) ->
+      let name = string_of_ustring (pprint_type_str n) in
+      fprintf fmt "@[<hov 0>@[<hov %d>rectype %s in@]@ %a@]" !ref_indent name
+        print_tm (Match, tm)
+  | TmRecField (_, n, ty, tm) ->
+      let name = string_of_ustring n in
+      let ty = ty |> ustring_of_ty |> string_of_ustring in
+      fprintf fmt "@[<hov 0>field %s%s in@ %a@]" name (print_ty_if_known ty)
+        print_tm (Match, tm)
+  | TmRecCreation (_, n, r) ->
+      let name = string_of_ustring n in
+      let contents = Record.fold (fun l v ack -> (l, v) :: ack) r [] in
+      print_extrecord name fmt contents
+  | TmRecExtend _ as t ->
+      raise_error (tm_info t) "Pprint unsupported for TmRecExtend!"
 
 (** Print an environment on the given formatter. *)
 and print_env fmt env =

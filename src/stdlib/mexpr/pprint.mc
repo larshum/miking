@@ -211,7 +211,7 @@ lang MExprIdentifierPrettyPrint = IdentifierPrettyPrint
     (lam str. if forAll isDigit str then true else _isValidLowerIdent str)
 end
 
-lang PrettyPrint = IdentifierPrettyPrint
+lang PrettyPrint = IdentifierPrettyPrint + MExprAst
   sem isAtomic =
   -- Intentionally left blank
   sem patPrecedence =
@@ -256,7 +256,10 @@ lang PrettyPrint = IdentifierPrettyPrint
   sem type2str =
   | ty -> typeToString pprintEnvEmpty ty
 
-  sem kind2str = 
+  sem pat2str =
+  | pat -> (getPatStringCode 0 pprintEnvEmpty pat).1
+
+  sem kind2str =
   | kind -> kindToString pprintEnvEmpty kind
 
   -- Helper function for printing parentheses
@@ -736,6 +739,14 @@ lang NeverPrettyPrint = PrettyPrint + NeverAst
   | TmNever _ -> (env,"never")
 end
 
+lang PlaceholderPrettyPrint = PrettyPrint + PlaceholderAst
+  sem isAtomic =
+  | TmPlaceholder _ -> true
+
+  sem pprintCode indent env =
+  | TmPlaceholder _ -> (env, "placeholder")
+end
+
 ---------------
 -- CONSTANTS --
 ---------------
@@ -938,6 +949,11 @@ lang ConTagPrettyPrint = ConTagAst + ConstPrettyPrint
   | CConstructorTag _ -> "constructorTag"
 end
 
+lang TypeOfPrettyPrint = TypeOpAst + ConstPrettyPrint
+  sem getConstStringCode indent =
+  | CTypeOf _ -> "debug_typeof"
+end
+
 lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CTensorCreateUninitInt _ -> "tensorCreateUninitInt"
@@ -978,6 +994,7 @@ lang BootParserPrettyPrint = BootParserAst + ConstPrettyPrint
   | CBootParserGetListLength _ -> "bootParserGetListLength"
   | CBootParserGetConst _ -> "bootParserGetConst"
   | CBootParserGetPat _ -> "bootParserGetPat"
+  | CBootParserGetCopat _ -> "bootParserGetCopat"
   | CBootParserGetInfo _ -> "bootParserGetInfo"
 end
 
@@ -1462,7 +1479,8 @@ lang MExprPrettyPrint =
   SeqOpPrettyPrint + FileOpPrettyPrint + IOPrettyPrint +
   RandomNumberGeneratorPrettyPrint + SysPrettyPrint + TimePrettyPrint +
   ConTagPrettyPrint + RefOpPrettyPrint + TensorOpPrettyPrint +
-  BootParserPrettyPrint + UnsafeCoercePrettyPrint +
+  BootParserPrettyPrint + UnsafeCoercePrettyPrint + TypeOfPrettyPrint +
+  PlaceholderPrettyPrint +
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +

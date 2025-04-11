@@ -16,6 +16,8 @@ include "pprint.mc"
 include "builtin.mc"
 include "type.mc"
 
+include "extrec/ast.mc"
+
 type TypeEnv = {
   varEnv: Map Name (use Ast in Type),
   conEnv: Map Name (use Ast in Type),
@@ -26,7 +28,7 @@ let _typeEnvEmpty = {
   varEnv = mapEmpty nameCmp,
   conEnv = mapEmpty nameCmp,
   tyEnv  = mapFromSeq nameCmp (
-    map (lam t : (String, [String]). (nameNoSym t.0, tyvariant_ [])) builtinTypes
+    map (lam t : (String, Name, [String]). (t.1, tyvariant_ [])) builtinTypes
   )
 }
 
@@ -621,6 +623,10 @@ lang NeverTypeAnnot = TypeAnnot + NeverAst
   | TmNever t -> TmNever {t with ty = (ityunknown_ t.info)}
 end
 
+lang PlaceHolderTypeAnnotation = TypeAnnot + PlaceholderAst
+  sem typeAnnotExpr (env : TypeEnv) =
+  | TmPlaceholder t -> TmPlaceholder {t with ty = (ityunknown_ t.info)}
+end
 
 ---------------------------
 -- PATTERN TYPE ANNOTATE --
@@ -771,7 +777,7 @@ lang MExprTypeAnnot =
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
   TypeTypeAnnot + RecLetsTypeAnnot + ConstTypeAnnot + DataTypeAnnot +
   MatchTypeAnnot + UtestTypeAnnot + SeqTypeAnnot + NeverTypeAnnot +
-  ExpTypeAnnot +
+  ExpTypeAnnot + PlaceHolderTypeAnnotation +
 
   -- Patterns
   NamedPatTypeAnnot + SeqTotPatTypeAnnot + SeqEdgePatTypeAnnot +

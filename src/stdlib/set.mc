@@ -66,6 +66,20 @@ let setFold : all a. all acc. (acc -> a -> acc) -> acc -> Set a -> acc =
   lam f. lam acc. lam s.
     mapFoldWithKey (lam acc. lam k. lam. f acc k) acc s
 
+-- `setMap cmp f s` maps over the values of s and creates a new set from the 
+-- results
+let setMap : all a. all b. (b -> b -> Int) -> (a -> b) -> Set a -> Set b = 
+  lam cmp. lam f. lam s.
+    mapFoldWithKey 
+      (lam acc. lam k. lam. mapInsert (f k) () acc) 
+      (mapEmpty cmp)
+      s
+
+utest setFold addi 0 (setMap subi (lam x. muli x 2) (setOfSeq subi [1,2,3])) with 12
+
+-- Transform a set to a sequence.
+let setToSeq : all a. Set a -> [a] = lam s. mapKeys s
+
 -- Two sets are equal, where equality is determined by the compare function.
 -- Both sets are assumed to have the same equality function.
 let setEq : all a. Set a -> Set a -> Bool = lam m1. lam m2. mapEq (lam. lam. true) m1 m2

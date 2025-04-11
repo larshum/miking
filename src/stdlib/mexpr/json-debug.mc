@@ -10,10 +10,18 @@ include "mlang/ast.mc"
 
 lang AstToJson = Ast + DeclAst
   sem exprToJson : Expr -> JsonValue
+  sem exprToJson =
+  | tm -> error (join ["Missing case in exprToJson ", info2str (infoTm tm)])
   sem typeToJson : Type -> JsonValue
+  sem typeToJson =
+  | ty -> error (join ["Missing case in typeToJson ", info2str (infoTy ty)])
   sem kindToJson : Kind -> JsonValue
   sem patToJson : Pat -> JsonValue
+  sem patToJson =
+  | pat -> error (join ["Missing case in patToJson ", info2str (infoPat pat)])
   sem declToJson : Decl -> JsonValue
+  sem declToJson =
+  | decl -> error (join ["Missing case in declToJson ", info2str (infoDecl decl)])
 
   sem optToNull : Option JsonValue -> JsonValue
   sem optToNull =
@@ -31,12 +39,6 @@ lang AstToJson = Ast + DeclAst
 
   sem infoToJson : Info -> JsonValue
   sem infoToJson = | info -> JsonString (info2str info)
-
-  -- TODO(vipa, 2024-05-16): This is a temporary helper until
-  -- https://github.com/miking-lang/miking/issues/826 is implemented
-  sem exprAsDecl : Expr -> Option (Decl, Expr)
-  sem exprAsDecl =
-  | _ -> None ()
 end
 
 lang VarToJson = AstToJson + VarAst
@@ -74,33 +76,7 @@ lang LamToJson = AstToJson + LamAst
     ] )
 end
 
-lang DeclsToJson = AstToJson + LetAst + LetDeclAst + RecLetsAst + RecLetsDeclAst + TypeAst + TypeDeclAst + DataAst + DataDeclAst + UtestAst + UtestDeclAst + ExtAst + ExtDeclAst
-  sem exprAsDecl =
-  | TmLet x -> Some
-    ( DeclLet {ident = x.ident, tyAnnot = x.tyAnnot, tyBody = x.tyBody, body = x.body, info = x.info}
-    , x.inexpr
-    )
-  | TmRecLets x -> Some
-    ( DeclRecLets {info = x.info, bindings = x.bindings}
-    , x.inexpr
-    )
-  | TmType x -> Some
-    ( DeclType {ident = x.ident, params = x.params, tyIdent = x.tyIdent, info = x.info}
-    , x.inexpr
-    )
-  | TmConDef x -> Some
-    ( DeclConDef {ident = x.ident, tyIdent = x.tyIdent, info = x.info}
-    , x.inexpr
-    )
-  | TmUtest x -> Some
-    ( DeclUtest {test = x.test, expected = x.expected, tusing = x.tusing, tonfail = x.tonfail, info = x.info}
-    , x.next
-    )
-  | TmExt x -> Some
-    ( DeclExt {ident = x.ident, tyIdent = x.tyIdent, effect = x.effect, info = x.info}
-    , x.inexpr
-    )
-
+lang DeclsToJson = AstToJson + MExprAsDecl
   sem exprToJson =
   | tm & (TmLet _ | TmRecLets _ | TmType _ | TmConDef _ | TmUtest _ | TmExt _) ->
     recursive let work = lam acc. lam expr.
@@ -587,6 +563,14 @@ lang ExtToJson = ExtDeclAst + AstToJson
     , ("tyIdent", typeToJson x.tyIdent)
     , ("effect", JsonBool x.effect)
     , ("info", infoToJson x.info)
+    ] )
+end
+
+lang MLangProgramToJson = MLangTopLevel + AstToJson
+  sem progToJson =
+  | x -> JsonObject (mapFromSeq cmpString
+    [ ("decls", JsonArray (map declToJson x.decls))
+    , ("expr", exprToJson x.expr)
     ] )
 end
 

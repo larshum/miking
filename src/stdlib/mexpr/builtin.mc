@@ -1,5 +1,4 @@
 include "ast.mc"
-include "const-types.mc"
 include "map.mc"
 include "set.mc"
 include "stringid.mc"
@@ -101,6 +100,8 @@ let builtin = use MExprAst in
   , ("ref", CRef ())
   , ("deref", CDeRef ())
   , ("modref", CModRef ())
+  -- Type operations
+  , ("debug_typeof", CTypeOf ())
   -- Tensors
   , ("tensorCreateUninitInt", CTensorCreateUninitInt ())
   , ("tensorCreateUninitFloat", CTensorCreateUninitFloat ())
@@ -137,6 +138,7 @@ let builtin = use MExprAst in
   , ("bootParserGetListLength", CBootParserGetListLength ())
   , ("bootParserGetConst", CBootParserGetConst ())
   , ("bootParserGetPat", CBootParserGetPat ())
+  , ("bootParserGetCopat", CBootParserGetCopat ())
   , ("bootParserGetInfo", CBootParserGetInfo ())
   ]
 
@@ -145,3 +147,8 @@ let builtinTypes : [(String, [String])] =
   , ("Ref", ["a"])
   , ("BootParseTree", [])
   ]
+let builtinTypes : [(String, Name, [String])] =
+  map (lam pair. (pair.0, nameSym pair.0, pair.1)) builtinTypes
+
+let builtinTypeNames : Map String Name =
+  foldl (lam env. lam t. mapInsert t.0 t.1 env) (mapEmpty cmpString) builtinTypes

@@ -9,7 +9,9 @@ include "ext/file-ext.ext-ocaml.mc"
 include "ext/toml-ext.ext-ocaml.mc"
 include "ext/async-ext.ext-ocaml.mc"
 include "ext/rtppl-ext.ext-ocaml.mc"
-include "ext/array-ext.ext-ocaml.mc"
+include "ext/arr-ext.ext-ocaml.mc"
+include "ext/mat-ext.ext-ocaml.mc"
+include "ext/cblas-ext.ext-ocaml.mc"
 include "sundials/sundials.ext-ocaml.mc"
 include "sundials/ida.ext-ocaml.mc"
 include "sundials/cvode.ext-ocaml.mc"
@@ -18,7 +20,7 @@ include "multicore/atomic.ext-ocaml.mc"
 include "multicore/thread.ext-ocaml.mc"
 include "multicore/mutex.ext-ocaml.mc"
 include "multicore/cond.ext-ocaml.mc"
-include "ipopt/ipopt.ext-ocaml.mc"
+include "ext/reflection-ext.ext-ocaml.mc"
 
 
 type ExternalImpl = {
@@ -36,7 +38,9 @@ let globalExternalImplsMap : Map String [ExternalImpl] =
     [
       extTestMap,               -- For testing purposes
       mathExtMap,
-      arrayExtMap,
+      arrExtMap,
+      matExtMap,
+      cblasExtMap,
       sundialsExtMap,
       idaExtMap,
       cvodeExtMap,
@@ -48,10 +52,10 @@ let globalExternalImplsMap : Map String [ExternalImpl] =
       distExtMap,
       matrixExtMap,
       fileExtMap,
-      ipoptExtMap,
       tomlExtMap,
       asyncExtMap,
-      rtpplExtMap
+      rtpplExtMap,
+      reflectionMap
     ]
 
 -- List OCaml packages available on the system. These are returned on the format

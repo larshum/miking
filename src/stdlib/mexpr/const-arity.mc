@@ -184,6 +184,11 @@ lang ConTagArity = ConstArity + ConTagAst
   | CConstructorTag _ -> 1
 end
 
+lang TypeOpArity = ConstArity + TypeOpAst
+  sem constArity =
+  | CTypeOf _ -> 1
+end
+
 lang RefOpArity = ConstArity + RefOpAst
   sem constArity =
   | CRef _ -> 1
@@ -231,6 +236,7 @@ lang BootParserArity = ConstArity + BootParserAst
   | CBootParserGetListLength _ -> 2
   | CBootParserGetConst _ -> 2
   | CBootParserGetPat _ -> 2
+  | CBootParserGetCopat _ -> 2
   | CBootParserGetInfo _ -> 2
 end
 
@@ -241,7 +247,7 @@ lang MExprArity =
   FloatStringConversionArity + SymbArity + CmpSymbArity + SeqOpArity +
   FileOpArity + IOArity + RandomNumberGeneratorArity + SysArity + TimeArity +
   ConTagArity + RefOpArity + TensorOpArity + BootParserArity +
-  UnsafeCoerceArity
+  UnsafeCoerceArity + TypeOpArity
 end
 
 mexpr

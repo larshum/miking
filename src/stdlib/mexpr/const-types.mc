@@ -3,12 +3,13 @@
 
 include "ast.mc"
 include "ast-builder.mc"
+include "builtin.mc"
 
 let mktyall_ = lam s. lam f. tyall_ s (f (tyvar_ s))
 let mkstyall_ = lam s. lam k. lam f. styall_ s k (f (tyvar_ s))
 
 let mktybuiltin_ = lam s. lam d. lam disable. lam f.
-  let ident = nameNoSym s in
+  let ident = mapFindExn s builtinTypeNames in
   if disable then f (nsitycon_ ident tyunknown_ (NoInfo ()))
   else
     mkstyall_ d
@@ -231,6 +232,11 @@ lang ConTagTypeAst = TyConst + ConTagAst
   | CConstructorTag _ -> mktyall_ "a" (lam a. tyarrow_ a tyint_)
 end
 
+lang TypeOpTypeAst = TyConst + TypeOpAst
+  sem tyConstBase d =
+  | CTypeOf _ -> mktyall_ "a" (lam a. tyarrow_ a tystr_)
+end
+
 lang TensorOpTypeAst = TyConst + TensorOpAst
   sem tyConstBase d =
   | CTensorCreateUninitInt _ -> tytensorcreateuninitint_
@@ -295,6 +301,7 @@ lang BootParserTypeAst = TyConst + BootParserAst
   | CBootParserGetListLength _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, tyint_])
   | CBootParserGetConst _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, b])
   | CBootParserGetPat _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, b])
+  | CBootParserGetCopat _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, b])
   | CBootParserGetInfo _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, b])
 end
 
@@ -304,5 +311,5 @@ lang MExprConstType =
   SymbTypeAst + CmpSymbTypeAst + SeqOpTypeAst + FileOpTypeAst + IOTypeAst +
   RandomNumberGeneratorTypeAst + SysTypeAst + FloatIntConversionTypeAst +
   FloatStringConversionTypeAst + TimeTypeAst + RefOpTypeAst + ConTagTypeAst +
-  TensorOpTypeAst + BootParserTypeAst + UnsafeCoerceTypeAst
+  TensorOpTypeAst + BootParserTypeAst + UnsafeCoerceTypeAst + TypeOpTypeAst
 end
