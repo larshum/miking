@@ -244,7 +244,7 @@ let foldr2_array (f : 'a -> 'b -> 'c -> 'c) (l : 'a t) (r : 'b t) (acc : 'c) :
     done ;
     !r
 
-let collapse_array (s: 'a t) : unit =
+let collapse_array (s : 'a t) : unit =
   let _ = _collapse_array s in
   ()
 
