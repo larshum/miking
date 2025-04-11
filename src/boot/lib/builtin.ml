@@ -86,6 +86,7 @@ let builtin =
   ; ("foldl", f (Cfoldl (None, None)))
   ; ("foldr", f (Cfoldr (None, None)))
   ; ("subsequence", f (Csubsequence (None, None)))
+  ; ("collapseRope", f Ccollapse_rope)
     (* MCore intrinsics: Random numbers *)
   ; ("randIntU", f (CrandIntU None))
   ; ("randSetSeed", f CrandSetSeed) (* MCore intrinsics: Time *)

@@ -427,6 +427,8 @@ let rec print_const fmt = function
       fprintf fmt "foldr"
   | Csubsequence _ ->
       fprintf fmt "subsequence"
+  | Ccollapse_rope ->
+      fprintf fmt "collapse_rope"
   (* MCore intrinsics: Random numbers *)
   | CrandIntU _ ->
       fprintf fmt "randIntU"

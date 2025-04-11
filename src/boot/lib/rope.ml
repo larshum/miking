@@ -244,6 +244,10 @@ let foldr2_array (f : 'a -> 'b -> 'c -> 'c) (l : 'a t) (r : 'b t) (acc : 'c) :
     done ;
     !r
 
+let collapse_array (s: 'a t) : unit =
+  let _ = _collapse_array s in
+  ()
+
 module Convert = struct
   let to_array_array (s : 'a t) : 'a array = _collapse_array s
 

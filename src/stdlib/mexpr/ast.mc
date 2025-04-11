@@ -914,6 +914,7 @@ lang SeqOpAst = SeqAst + ConstAst
   | CIsRope {}
   | CSplitAt {}
   | CSubsequence {}
+  | CCollapseRope {}
 end
 
 lang FileOpAst = ConstAst

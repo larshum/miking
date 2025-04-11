@@ -155,6 +155,12 @@ module Mseq : sig
    *)
   val mapi : (int -> 'a -> 'b) -> 'a t -> 'b t
 
+  (* Complexity:
+   * rope (?): O(h) where h is the height of the rope
+   * list (?): O(1)
+   *)
+  val collapse_rope : 'a t -> unit
+
   module Helpers : sig
     val to_seq : 'a t -> 'a Seq.t
 

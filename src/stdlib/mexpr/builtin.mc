@@ -68,6 +68,7 @@ let builtin = use MExprAst in
   , ("foldl", CFoldl ())
   , ("foldr", CFoldr ())
   , ("subsequence", CSubsequence ())
+  , ("collapseRope", CCollapseRope ())
   -- Random numbers
   , ("randIntU", CRandIntU ())
   , ("randSetSeed", CRandSetSeed ())

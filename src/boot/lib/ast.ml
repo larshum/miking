@@ -151,6 +151,7 @@ and const =
   | Cfoldl of (tm -> tm -> tm) option * tm option
   | Cfoldr of (tm -> tm -> tm) option * tm option
   | Csubsequence of tm Mseq.t option * int option
+  | Ccollapse_rope
   (* MCore intrinsics: Random numbers *)
   | CrandIntU of int option
   | CrandSetSeed
@@ -871,6 +872,8 @@ let const_has_side_effect = function
   | Cfoldr _
   | Csubsequence _ ->
       false
+  | Ccollapse_rope ->
+      true
   (* MCore intrinsics: Random numbers *)
   | CrandIntU _ ->
       true

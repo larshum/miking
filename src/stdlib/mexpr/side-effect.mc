@@ -79,6 +79,7 @@ lang ConstSideEffect = ConstSideEffectBase + MExprAst
   | CHead _ | CTail _ | CNull _ | CMap _ | CMapi _ | CIter _ | CIteri _
   | CFoldl _ | CFoldr _ | CCreate _ | CCreateList _ | CCreateRope _
   | CSplitAt _ | CSubsequence _ -> false
+  | CCollapseRope _ -> true
   | CFileRead _ | CFileWrite _ | CFileExists _ | CFileDelete _ -> true
   | CPrint _ | CPrintError _ | CDPrint _ | CFlushStdout _ | CFlushStderr _
   | CReadLine _ | CReadBytesAsString _ -> true

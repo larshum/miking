@@ -179,6 +179,8 @@ lang SeqOpTypeAst = TyConst + SeqOpAst
                                      tytuple_ [tyseq_ a, tyseq_ a]])
   | CSubsequence _ ->
     mktyall_ "a" (lam a. tyarrows_ [ tyseq_ a, tyint_, tyint_, tyseq_ a])
+  | CCollapseRope _ ->
+    mktyall_ "a" (lam a. tyarrow_ (tyseq_ a) tyunit_)
 end
 
 lang FileOpTypeAst = TyConst + FileOpAst

@@ -138,6 +138,7 @@ lang SeqOpArity = ConstArity + SeqOpAst
   | CIsRope _ -> 1
   | CSplitAt _ -> 2
   | CSubsequence _ -> 3
+  | CCollapseRope _ -> 1
 end
 
 lang FileOpArity = ConstArity + FileOpAst

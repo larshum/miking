@@ -96,6 +96,9 @@ val foldr2_array : ('a -> 'b -> 'c -> 'c) -> 'a t -> 'b t -> 'c -> 'c
     exception [Invalid_argument "Rope.foldr2"] if the lengths of [l] and [r]
     are not equal. *)
 
+val collapse_array : 'a t -> unit
+(** [Rope.collapse_* s] collapses the provided rope. **)
+
 module Convert : sig
   val to_array_array : 'a t -> 'a array
   (** [Rope.Convert.to_array_* s] converts the rope [s] into an array. This

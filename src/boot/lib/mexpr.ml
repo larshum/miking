@@ -1128,6 +1128,8 @@ let arity = function
       2
   | Csubsequence (_, Some _) ->
       1
+  | Ccollapse_rope ->
+      1
   (* MCore intrinsics: Random numbers *)
   | CrandIntU None ->
       2
@@ -2082,6 +2084,10 @@ and delta (apply : info -> tm -> tm -> tm) fi c v =
   | Csubsequence (Some s, Some off), TmConst (_, CInt n) ->
       TmSeq (fi, Mseq.subsequence s off n)
   | Csubsequence _, _ ->
+      fail_constapp fi
+  | Ccollapse_rope, TmSeq (_, s) ->
+      Mseq.collapse_rope s ; tm_unit
+  | Ccollapse_rope, _ ->
       fail_constapp fi
   (* MCore intrinsics: Random numbers *)
   | CrandIntU None, TmConst (fi, CInt v) ->

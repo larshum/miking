@@ -891,6 +891,7 @@ lang SeqOpPrettyPrint = SeqOpAst + ConstPrettyPrint + CharAst
   | CIsRope _ -> "isRope"
   | CSplitAt _ -> "splitAt"
   | CSubsequence _ -> "subsequence"
+  | CCollapseRope _ -> "collapseRope"
 end
 
 lang FileOpPrettyPrint = FileOpAst + ConstPrettyPrint

@@ -543,6 +543,7 @@ lang SeqOpEvalFirstOrder =
     TmSeq s, TmConst {val = CInt ofs}, TmConst {val = CInt len}
   ]) ->
     TmSeq {s with tms = subsequence s.tms ofs.val len.val}
+  | (CCollapseRope _, [TmSeq s]) -> collapseRope s.tms; uunit_
 end
 
 lang SeqOpEval = SeqOpEvalFirstOrder

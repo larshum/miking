@@ -158,6 +158,12 @@ module Mseq = struct
     | List s ->
         List (List.mapi f s)
 
+  let collapse_rope = function
+    | Rope s ->
+        Rope.collapse_array s
+    | List _ ->
+        ()
+
   module Helpers = struct
     let to_seq = function
       | Rope s ->
