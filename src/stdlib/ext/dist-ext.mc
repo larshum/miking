@@ -1,5 +1,6 @@
 include "math.mc"
 include "bool.mc"
+include "seq.mc"
 
 -- Chi2
 external externalChi2LogPdf : Float -> Float -> Float
@@ -131,6 +132,23 @@ let uniformDiscretePdf : Int -> Int -> Int -> Float = lam a. lam b. lam x.
     else 0.
   else 0.
 
+-- Discretized Gamma, n categories are used to approximate the continous distribution with equal probability for each category. The median is used to represent the average rate.
+let discretizedGammaSupport = lam shape:Float. lam scale:Float. lam n:Int.
+  let bins = (linspace 0. 1. (addi n 1)) in
+  let quantilesX = map (lam b. gammaPpf shape scale b) bins in
+  let medians = mapi (lam ind. lam x. gammaPpf shape scale (divf (addf (gammaCdf shape scale x) (gammaCdf shape scale (get quantilesX (addi ind 1)))) 2.)) (init quantilesX) in
+  let factor = divf (int2float n) (foldl addf 0. medians) in
+  let scaledMedians = map (lam e. mulf e factor) medians in
+  scaledMedians
+let discretizedGammaSample = lam shape:Float. lam scale:Float. lam n:Int.
+  let scaledMedians = discretizedGammaSupport shape scale n in
+  let ind = uniformDiscreteSample 0 (subi n 1) in
+  get scaledMedians ind
+let discretizedGammaLogPmf = lam shape:Float. lam scale:Float. lam n:Int. lam x:Float.
+  let support = discretizedGammaSupport shape scale n in
+  if any (lam s. eqfApprox 1e-12 x s) support then log (divf 1. (int2float n))
+  else negf inf
+
 -- Poisson
 let poissonLogPmf = lam lambda:Float. lam x:Int.
   subf (subf (mulf (int2float x) (log lambda)) lambda) (logFactorial x)
@@ -202,6 +220,23 @@ let betabinLogPmf:Int -> Float -> Float -> Int -> Float = lam n. lam a. lam b. l
 
 let betabinPmf = lam n:Int. lam a: Float. lam b: Float. lam x:Int.
   exp (betabinLogPmf n a b x)
+
+-- Reciprocal (or log uniform) distribution
+let reciprocalSample : Float -> Float -> Float = lam a. lam b.
+  let logSample = uniformContinuousSample (log a) (log b) in
+  exp logSample
+
+let reciprocalPdf : Float -> Float -> Float -> Float = lam a. lam b. lam x.
+  if geqf x a then
+    if leqf x b then divf 1.0 (mulf (log (divf b a)) x)
+    else 0.
+  else 0.
+
+let reciprocalLogPdf : Float -> Float -> Float -> Float = lam a. lam b. lam x.
+  if geqf x a then
+    if leqf x b then negf (log (mulf (log (divf b a)) x))
+    else negf inf 
+  else negf inf 
 
 -- Seed
 external externalSetSeed ! : Int -> ()
@@ -292,6 +327,14 @@ utest uniformDiscreteSample 3 8 with 3 using intRange 3 8 in
 utest exp (uniformDiscreteLogPdf 1 2 1) with 0.5 using _eqf in
 utest uniformDiscretePdf 1 2 1 with 0.5 using _eqf in
 
+-- Testing Discretized Gamma
+utest discretizedGammaSupport 0.5 2. 4 with [0.0290777547619,0.28071453714,0.924773065114,2.76543464298] using eqSeq _eqf in
+utest let s = (discretizedGammaSample 0.5 2. 4) in
+  any (lam x. _eqf x s) [0.0290777547619,0.28071453714,0.924773065114,2.76543464298] with true in
+utest discretizedGammaLogPmf 0.5 2. 4 0.0290777547619 with negf 1.38629436112 using _eqf in
+utest discretizedGammaLogPmf 0.5 2. 4 (negf 1.) with negf inf in
+utest discretizedGammaLogPmf 0.5 2. 4 5. with negf inf in
+
 -- Testing Poisson
 utest poissonPmf 2.0 2 with 0.270670566473 using _eqf in
 utest exp (poissonLogPmf 3.0 2) with 0.224041807655 using _eqf in
@@ -321,6 +364,13 @@ utest betabinLogPmf 5 1. 1. 2 with -1.79175946923 using _eqf in
 utest exp (betabinLogPmf 5 1. 1. 3) with 0.166666666667 using _eqf in
 utest betabinPmf 5 1. 1. 3 with 0.166666666667 using _eqf in
 utest betabinSample 20 1. 1. with 0 using intRange 0 20 in
+
+-- Testing Reciprocal
+utest reciprocalLogPdf 1. 2. 1.5 with -0.038952187526 using _eqf in
+utest reciprocalLogPdf 1. 2. 2.5 with negf inf using leqf in
+utest exp (reciprocalLogPdf 4. 6. 5.) with 0.493260692475 using _eqf in
+utest reciprocalPdf 4. 6. 5. with 0.493260692475 using _eqf in
+utest reciprocalSample 0.5 0.7 with 0.5 using floatRange 0.5 0.7 in
 
 -- Testing seed
 utest setSeed 0; uniformSample (); uniformSample ()
