@@ -20,7 +20,8 @@ lang OCamlSimplify = OCamlAst + MExprSideEffect
     let env = setEmpty nameCmp in
     match foldr (lam t. lam acc. deadcodeTop acc t) (env, []) tops with (_, tops) in
     let tops = inlineSingleUseBindings tops in
-    removeRedundantObjMagics tops
+    let tops = removeRedundantObjMagics tops in
+    simplifyThunksInObjMagic tops
 
   sem simplifyTop : Map Name Int -> Top -> (Map Name Int, Top)
   sem simplifyTop env =
@@ -200,4 +201,46 @@ lang OCamlSimplify = OCamlAst + MExprSideEffect
       TmApp {t with lhs = removeRedundantObjMagicsExpr t.lhs,
                     rhs = removeRedundantObjMagicsExpr t.rhs}
   | t -> smap_Expr_Expr removeRedundantObjMagicsExpr t
+
+  sem simplifyThunksInObjMagic : [Top] -> [Top]
+  sem simplifyThunksInObjMagic =
+  | tops -> map simplifyThunksInObjMagicTop tops
+
+  sem simplifyThunksInObjMagicTop : Top -> Top
+  sem simplifyThunksInObjMagicTop =
+  | OTopLet t -> OTopLet {t with body = simplifyThunksInObjMagicExpr t.body}
+  | OTopRecLets t ->
+    let simplifyBind = lam bind.
+      {bind with body = simplifyThunksInObjMagicExpr bind.body}
+    in
+    OTopRecLets {t with bindings = map simplifyBind t.bindings}
+  | OTopExpr {expr = expr} ->
+    OTopExpr {expr = simplifyThunksInObjMagicExpr expr}
+  | t -> t
+
+  sem simplifyThunksInObjMagicExpr : Expr -> Expr
+  sem simplifyThunksInObjMagicExpr =
+  | t & (TmApp {
+      lhs = OTmVarExt {ident = "Obj.magic"},
+      rhs = TmApp (tt & {
+        lhs = TmLam {body = body & !(TmLam _)},
+        rhs = TmRecord {bindings = bindings}
+      })
+  }) ->
+    if mapIsEmpty bindings then
+      TmApp {tt with lhs = OTmVarExt {ident = "Obj.magic"},
+                     rhs = simplifyThunksInObjMagicExpr body}
+    else
+      smap_Expr_Expr simplifyThunksInObjMagicExpr t
+  | t & (TmApp {
+      lhs = TmApp (tt & {
+        lhs = OTmVarExt {ident = "Obj.magic"},
+        rhs = TmLam {body = body & !(TmLam _)}}),
+      rhs = TmRecord {bindings = bindings}
+  }) ->
+    if mapIsEmpty bindings then
+      TmApp {tt with rhs = simplifyThunksInObjMagicExpr body}
+    else
+      smap_Expr_Expr simplifyThunksInObjMagicExpr t
+  | t -> smap_Expr_Expr simplifyThunksInObjMagicExpr t
 end
