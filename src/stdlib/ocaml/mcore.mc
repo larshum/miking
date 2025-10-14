@@ -5,6 +5,7 @@ include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
+include "ocaml/simplify.mc"
 include "sys.mc"
 
 type Hooks a =
@@ -24,7 +25,8 @@ let mkEmptyHooks : all a. ([String] -> [String] -> String -> a) -> Hooks a =
 
 lang MCoreCompileLang =
   MExprRemoveTypeAscription + MExprTypeLift +
-  OCamlTypeDeclGenerate + OCamlGenerate + OCamlGenerateExternalNaive
+  OCamlTypeDeclGenerate + OCamlGenerate + OCamlGenerateExternalNaive +
+  OCamlSimplify
 
   sem collectLibraries : Map Name [ExternalImpl] -> Set String -> ([String], [String])
   sem collectLibraries extNameMap =
@@ -54,6 +56,8 @@ lang MCoreCompileLang =
     let exprTops = generateTops env ast in
     let exprTops = hooks.postprocessOcamlTops exprTops in
 
+    let tops = simplify (concat typeTops exprTops) in
+
     -- List OCaml packages availible on the system.
     let syslibs =
       setOfSeq cmpString
@@ -64,7 +68,7 @@ lang MCoreCompileLang =
     match collectLibraries env.exts syslibs with (libs, clibs) in
     let ocamlProg =
       use OCamlPrettyPrint in
-      pprintOcamlTops (concat typeTops exprTops)
+      pprintOcamlTops tops
     in
 
     -- If option --debug-generate, print the AST
