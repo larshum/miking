@@ -193,7 +193,7 @@ lang OCamlSimplify = OCamlAst + MExprSideEffect
 
   sem removeRedundantObjMagicsExpr : Expr -> Expr
   sem removeRedundantObjMagicsExpr =
-  | TmApp t ->
+  | TmApp (t & {lhs = OTmVarExt {ident = "Obj.magic"}}) ->
     match collectAppArguments t.rhs with (OTmVarExt {ident = "Obj.magic"}, _) then
       removeRedundantObjMagicsExpr t.rhs
     else
