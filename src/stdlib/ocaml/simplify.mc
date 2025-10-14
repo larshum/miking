@@ -1,8 +1,15 @@
-include "./ast.mc"
+include "mexpr/side-effect.mc"
+include "ocaml/ast.mc"
 include "map.mc"
 include "name.mc"
 
-lang OCamlSimplify = OCamlAst
+lang OCamlSimplify = OCamlAst + MExprSideEffect
+  sem exprArity : SideEffectEnv -> Expr -> Int
+  sem exprArity env =
+  | OTmLam t -> addi (exprArity env t.body) 1
+  | OTmVarExt _ -> 1
+  | OTmExprExt _ -> 1
+
   sem simplify : [Top] -> [Top]
   sem simplify =
   | tops ->
@@ -65,7 +72,7 @@ lang OCamlSimplify = OCamlAst
   sem deadcodeTop acc =
   | OTopLet t ->
     match acc with (ids, tops) in
-    if setMem t.ident ids then
+    if shouldKeepIdent ids t.ident t.body then
       match deadcodeExpr ids t.body with (ids, body) in
       (ids, cons (OTopLet {t with body = body}) tops)
     else
@@ -77,7 +84,7 @@ lang OCamlSimplify = OCamlAst
     in
     match acc with (ids, tops) in
     match mapAccumL deadcodeBody ids t.bindings with (ids, bindings) in
-    -- TODO: remove unused recursive let-bindings
+    let bindings = filter (lam bind. shouldKeepIdent ids bind.ident bind.body) bindings in
     (ids, cons (OTopRecLets {bindings = bindings}) tops)
   | OTopExpr t ->
     match acc with (ids, tops) in
@@ -91,14 +98,28 @@ lang OCamlSimplify = OCamlAst
   sem deadcodeExpr : Set Name -> Expr -> (Set Name, Expr)
   sem deadcodeExpr ids =
   | TmVar t -> (setInsert t.ident ids, TmVar t)
-  | TmDecl (t & {decl = DeclLet tt, inexpr = inexpr}) ->
+  | TmDecl (t & {decl = DeclLet tt}) ->
     match deadcodeExpr ids t.inexpr with (ids, inexpr) in
-    if setMem tt.ident ids then
+    if shouldKeepIdent ids tt.ident tt.body then
       match deadcodeExpr ids tt.body with (ids, body) in
       let d = TmDecl {t with decl = DeclLet {tt with body = body},
                              inexpr = inexpr} in
       (ids, d)
     else
       (ids, inexpr)
+  | TmDecl (t & {decl = DeclRecLets tt}) ->
+    let deadcodeBody = lam ids. lam bind.
+      match deadcodeExpr ids bind.body with (ids, body) in
+      (ids, {bind with body = body})
+    in
+    match deadcodeExpr ids t.inexpr with (ids, inexpr) in
+    match mapAccumL deadcodeBody ids tt.bindings with (ids, bindings) in
+    let bindings = filter (lam bind. shouldKeepIdent ids bind.ident bind.body) bindings in
+    (ids, TmDecl {t with decl = DeclRecLets {tt with bindings = bindings},
+                         inexpr = inexpr})
   | t -> smapAccumL_Expr_Expr deadcodeExpr ids t
+
+  sem shouldKeepIdent : Set Name -> Name -> Expr -> Bool
+  sem shouldKeepIdent ids id =
+  | body -> if setMem id ids then true else hasSideEffect body
 end
