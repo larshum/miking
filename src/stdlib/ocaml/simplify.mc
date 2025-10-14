@@ -146,18 +146,29 @@ lang OCamlSimplify = OCamlAst + MExprSideEffect
   sem collectVariableUses : Map Name Int -> Expr -> Map Name Int
   sem collectVariableUses env =
   | TmVar t -> mapInsertWith addi t.ident 1 env
-  | t -> sfold_Expr_Expr collectVariableUses env t
+  | t ->
+    let env = sfold_Expr_Expr collectVariableUses env t in
+    sfold_Expr_Pat collectVariableUsesPat env t
+
+  sem collectVariableUsesPat : Map Name Int -> Pat -> Map Name Int
+  sem collectVariableUsesPat env =
+  | PatNamed t ->
+    match t.ident with PName id then mapInsertWith addi id 1 env
+    else env
+  | p -> sfold_Pat_Pat collectVariableUsesPat env p
 
   sem inlineSingleUseBindingsInExpr : Map Name Int -> Map Name Expr -> Expr -> Expr
   sem inlineSingleUseBindingsInExpr env subMap =
   | TmVar t ->
     match mapLookup t.ident subMap with Some e then e else TmVar t
   | TmDecl (t & {decl = DeclLet tt, inexpr = inexpr}) ->
+    let body = inlineSingleUseBindingsInExpr env subMap tt.body in
     match mapLookup tt.ident env with Some 1 then
-      let subMap = mapInsert tt.ident tt.body subMap in
+      let subMap = mapInsert tt.ident body subMap in
       inlineSingleUseBindingsInExpr env subMap inexpr
     else
-      TmDecl {t with decl = DeclLet {tt with body = inlineSingleUseBindingsExpr tt.body},
+      let decl = DeclLet {tt with body = body} in
+      TmDecl {t with decl = decl,
                      inexpr = inlineSingleUseBindingsInExpr env subMap inexpr}
   | t -> smap_Expr_Expr (inlineSingleUseBindingsInExpr env subMap) t
 end
