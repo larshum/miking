@@ -17,7 +17,7 @@ lang OCamlSimplify = OCamlAst + MExprSideEffect
     match mapAccumL simplifyTop env tops with (_, tops) in
     let env = setEmpty nameCmp in
     match foldr (lam t. lam acc. deadcodeTop acc t) (env, []) tops with (_, tops) in
-    tops
+    inlineSingleUseBindings tops
 
   sem simplifyTop : Map Name Int -> Top -> (Map Name Int, Top)
   sem simplifyTop env =
@@ -122,4 +122,41 @@ lang OCamlSimplify = OCamlAst + MExprSideEffect
   sem shouldKeepIdent : Set Name -> Name -> Expr -> Bool
   sem shouldKeepIdent ids id =
   | body -> if setMem id ids then true else hasSideEffect body
+
+  sem inlineSingleUseBindings : [Top] -> [Top]
+  sem inlineSingleUseBindings =
+  | tops -> map inlineSingleUseBindingsTop tops
+
+  sem inlineSingleUseBindingsTop : Top -> Top
+  sem inlineSingleUseBindingsTop =
+  | OTopLet t -> OTopLet {t with body = inlineSingleUseBindingsExpr t.body}
+  | OTopRecLets t ->
+    let inlineSingleUseBindingsBind = lam bind.
+      {bind with body = inlineSingleUseBindingsExpr bind.body}
+    in
+    OTopRecLets {t with bindings = map inlineSingleUseBindingsBind t.bindings}
+  | t -> t
+
+  sem inlineSingleUseBindingsExpr : Expr -> Expr
+  sem inlineSingleUseBindingsExpr =
+  | t ->
+    let env = collectVariableUses (mapEmpty nameCmp) t in
+    inlineSingleUseBindingsInExpr env (mapEmpty nameCmp) t
+
+  sem collectVariableUses : Map Name Int -> Expr -> Map Name Int
+  sem collectVariableUses env =
+  | TmVar t -> mapInsertWith addi t.ident 1 env
+  | t -> sfold_Expr_Expr collectVariableUses env t
+
+  sem inlineSingleUseBindingsInExpr : Map Name Int -> Map Name Expr -> Expr -> Expr
+  sem inlineSingleUseBindingsInExpr env subMap =
+  | TmVar t ->
+    match mapLookup t.ident subMap with Some e then e else TmVar t
+  | TmDecl (t & {decl = DeclLet tt, inexpr = inexpr}) ->
+    match mapLookup tt.ident env with Some 1 then
+      let subMap = mapInsert tt.ident tt.body subMap in
+      inlineSingleUseBindingsInExpr env subMap inexpr
+    else
+      TmDecl {t with decl = DeclLet {tt with body = inlineSingleUseBindingsExpr tt.body},
+                     inexpr = inlineSingleUseBindingsInExpr env subMap inexpr}
 end
