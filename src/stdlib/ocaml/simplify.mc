@@ -159,4 +159,5 @@ lang OCamlSimplify = OCamlAst + MExprSideEffect
     else
       TmDecl {t with decl = DeclLet {tt with body = inlineSingleUseBindingsExpr tt.body},
                      inexpr = inlineSingleUseBindingsInExpr env subMap inexpr}
+  | t -> smap_Expr_Expr (inlineSingleUseBindingsInExpr env subMap) t
 end
