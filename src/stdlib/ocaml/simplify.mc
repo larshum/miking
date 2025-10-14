@@ -1,5 +1,7 @@
 include "mexpr/side-effect.mc"
 include "ocaml/ast.mc"
+include "ocaml/pprint.mc"
+include "pmexpr/utils.mc"
 include "map.mc"
 include "name.mc"
 
@@ -17,7 +19,8 @@ lang OCamlSimplify = OCamlAst + MExprSideEffect
     match mapAccumL simplifyTop env tops with (_, tops) in
     let env = setEmpty nameCmp in
     match foldr (lam t. lam acc. deadcodeTop acc t) (env, []) tops with (_, tops) in
-    inlineSingleUseBindings tops
+    let tops = inlineSingleUseBindings tops in
+    removeRedundantObjMagics tops
 
   sem simplifyTop : Map Name Int -> Top -> (Map Name Int, Top)
   sem simplifyTop env =
@@ -171,4 +174,30 @@ lang OCamlSimplify = OCamlAst + MExprSideEffect
       TmDecl {t with decl = decl,
                      inexpr = inlineSingleUseBindingsInExpr env subMap inexpr}
   | t -> smap_Expr_Expr (inlineSingleUseBindingsInExpr env subMap) t
+
+  sem removeRedundantObjMagics : [Top] -> [Top]
+  sem removeRedundantObjMagics =
+  | tops -> map removeRedundantObjMagicsTop tops
+
+  sem removeRedundantObjMagicsTop : Top -> Top
+  sem removeRedundantObjMagicsTop =
+  | OTopLet t -> OTopLet {t with body = removeRedundantObjMagicsExpr t.body}
+  | OTopRecLets t ->
+    let removeBind = lam bind.
+      {bind with body = removeRedundantObjMagicsExpr bind.body}
+    in
+    OTopRecLets {t with bindings = map removeBind t.bindings}
+  | OTopExpr {expr = expr} ->
+    OTopExpr {expr = removeRedundantObjMagicsExpr expr}
+  | t -> t
+
+  sem removeRedundantObjMagicsExpr : Expr -> Expr
+  sem removeRedundantObjMagicsExpr =
+  | TmApp t ->
+    match collectAppArguments t.rhs with (OTmVarExt {ident = "Obj.magic"}, _) then
+      removeRedundantObjMagicsExpr t.rhs
+    else
+      TmApp {t with lhs = removeRedundantObjMagicsExpr t.lhs,
+                    rhs = removeRedundantObjMagicsExpr t.rhs}
+  | t -> smap_Expr_Expr removeRedundantObjMagicsExpr t
 end
