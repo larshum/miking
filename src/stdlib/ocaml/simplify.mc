@@ -1,9 +1,22 @@
 include "mexpr/side-effect.mc"
 include "ocaml/ast.mc"
 include "ocaml/pprint.mc"
-include "pmexpr/utils.mc"
 include "map.mc"
 include "name.mc"
+
+-- Collects the parameters of an application and returns them in a tuple
+-- together with the target expression (the function being called).
+let collectAppArguments : use Ast in Expr -> (Expr, [Expr]) =
+  use MExprAst in
+  lam e.
+  recursive let work = lam acc. lam e.
+    match e with TmApp {lhs = !(TmApp _) & lhs, rhs = rhs} then
+      (lhs, cons rhs acc)
+    else match e with TmApp t then
+      work (cons t.rhs acc) t.lhs
+    else (e, acc)
+  in
+  work [] e
 
 lang OCamlSimplify = OCamlAst + MExprSideEffect
   sem exprArity : SideEffectEnv -> Expr -> Int
