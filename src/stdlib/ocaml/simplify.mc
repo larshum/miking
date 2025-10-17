@@ -1,6 +1,5 @@
 include "mexpr/side-effect.mc"
 include "ocaml/ast.mc"
-include "ocaml/pprint.mc"
 include "map.mc"
 include "name.mc"
 
@@ -18,7 +17,147 @@ let collectAppArguments : use Ast in Expr -> (Expr, [Expr]) =
   in
   work [] e
 
-lang OCamlSimplify = OCamlAst + MExprSideEffect
+lang OCamlReplaceRecords = MExprAst
+  syn Expr =
+  | TmTuple {elems : [Expr], ty : Type, info : Info}
+
+  sem tyTm : Expr -> Type
+  sem tyTm =
+  | TmTuple t -> t.ty
+
+  sem withType : Type -> Expr -> Expr
+  sem withType ty =
+  | TmTuple t -> TmTuple {t with ty = ty}
+
+  sem infoTm : Expr -> Info
+  sem infoTm =
+  | TmTuple t -> t.info
+
+  sem smapAccumL_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
+  sem smapAccumL_Expr_Expr f acc =
+  | TmTuple t ->
+    match mapAccumL f acc t.elems with (acc, elems) in
+    (acc, TmTuple {t with elems = elems})
+
+  syn Pat =
+  | PatTuple {pats : [Pat], ty : Type, info : Info}
+
+  sem tyPat : Pat -> Type
+  sem tyPat =
+  | PatTuple t -> t.ty
+
+  sem withTypePat : Type -> Pat -> Pat
+  sem withTypePat ty =
+  | PatTuple t -> PatTuple {t with ty = ty}
+
+  syn Type =
+  | TyTuple {tys : [Type], info : Info}
+
+  sem replaceRecords : Expr -> Expr
+  sem replaceRecords =
+  | TmRecord t ->
+    let ty = replaceRecordsType t.ty in
+    TmTuple {elems = mapValues t.bindings, ty = ty, info = t.info}
+  | t & (TmRecordUpdate _) ->
+    recursive let collectInnerUpdates = lam kvs. lam t.
+      match t with TmRecordUpdate tt then
+        collectInnerUpdates (cons (tt.key, tt.value) kvs) tt.rec
+      else (t, kvs)
+    in
+    match collectInnerUpdates [] t with (rec, kvs) in
+    let i = infoTm t in
+    let binds = extractBindings (unwrapType (tyTm rec)) in
+    let bindKeys = mapKeys binds in
+
+    -- If we have a record r : {x: Float, y: Float, z: Float} and we do
+    --
+    --   {r with x = 2.5}
+    --
+    -- we translate this into:
+    --
+    --   let (_, y, z) = r in
+    --   (2.5, y, z)
+    let updIndices : Map Int Expr =
+      mapFromSeq
+        subi
+        (map
+          (lam kv.
+            match kv with (k, v) in
+            match findi (eqSID k) bindKeys with Some idx then
+              (idx, v)
+            else error "")
+          kvs)
+    in
+    let boundIds =
+      create
+        (length bindKeys)
+        (lam i.
+          if mapMem i updIndices then None () else Some (nameSym "_var"))
+    in
+    let pats =
+      create
+        (length bindKeys)
+        (lam i.
+          let ident =
+            match get boundIds i with Some id then
+              PName id
+            else
+              PWildcard ()
+          in
+          PatNamed {ident = ident, ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()})
+    in
+    let tms =
+      create
+        (length bindKeys)
+        (lam i.
+          match mapLookup i updIndices with Some v then v
+          else match get boundIds i with Some id then nvar_ id
+          else never)
+    in
+    let elems = map replaceRecords tms in
+    let ty = replaceRecordsType (tyTm t) in
+    TmMatch {
+      target = rec,
+      pat = PatTuple {pats = pats, ty = ty, info = i},
+      thn = TmTuple {elems = elems, ty = ty, info = i},
+      els = TmNever {ty = TyUnknown {info = i}, info = i},
+      ty = ty,
+      info = i
+    }
+  | t ->
+    let t = smap_Expr_Type replaceRecordsType t in
+    let t = smap_Expr_Pat replaceRecordsPat t in
+    smap_Expr_Expr replaceRecords t
+
+  sem replaceRecordsPat : Pat -> Pat
+  sem replaceRecordsPat =
+  | PatRecord t ->
+    let binds = extractBindings (unwrapType t.ty) in
+    let ty = replaceRecordsType t.ty in
+    let pats =
+      mapMapWithKey
+        (lam id. lam.
+          match mapLookup id t.bindings with Some p then
+            p
+          else
+            PatNamed {ident = PWildcard (), info = t.info, ty = TyInt {info = t.info}})
+        binds
+    in
+    PatTuple {pats = mapValues pats, ty = ty, info = t.info}
+  | p -> smap_Pat_Pat replaceRecordsPat p
+
+  sem extractBindings : Type -> Map SID Type
+  sem extractBindings =
+  | TyRecord t -> t.fields
+  | _ -> error "invalid type of pattern"
+
+  sem replaceRecordsType : Type -> Type
+  sem replaceRecordsType =
+  | TyRecord t -> TyTuple {tys = mapValues t.fields, info = t.info}
+  | ty -> smap_Type_Type replaceRecordsType ty
+end
+
+lang OCamlSimplify = OCamlAst + MExprSideEffect + OCamlReplaceRecords
   sem exprArity : SideEffectEnv -> Expr -> Int
   sem exprArity env =
   | OTmLam t -> addi (exprArity env t.body) 1

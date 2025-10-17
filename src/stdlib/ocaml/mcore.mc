@@ -48,6 +48,7 @@ lang MCoreCompileLang =
   | hooks ->
     let ast = removeTypeAscription ast in
 
+    let ast = replaceRecords ast in
     match typeLift ast with (env, ast) in
     match generateTypeDecls env with (env, typeTops) in
     let env : GenerateEnv =

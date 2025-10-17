@@ -15,6 +15,7 @@ include "ocaml/compile.mc"
 include "ocaml/intrinsics-ops.mc"
 include "ocaml/generate-env.mc"
 include "ocaml/external.mc"
+include "ocaml/simplify.mc"
 include "common.mc"
 
 let _omatch_ = lam target. lam arms.
@@ -119,7 +120,7 @@ end
 -- match-expressions, for different kinds of patterns. We assume pattern
 -- lowering has been applied on the provided AST, which guarantees absence of
 -- AND, OR, and NOT patterns as well as nested patterns.
-lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate
+lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlReplaceRecords
   sem getPatName : PatName -> Option Name
   sem getPatName =
   | PWildcard _ -> None ()
@@ -226,6 +227,11 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate
     bind_
       (nulet_ targetId (objMagic (generate env t.target)))
       (_if cond thn (generate env t.els))
+  | TmMatch (t & {pat = PatTuple _}) ->
+    OTmMatch {
+      target = generate env t.target,
+      arms = [(t.pat, generate env t.thn)]
+    }
   | TmMatch (t & {pat = PatSeqEdge {prefix = prefix, middle = middle, postfix = postfix}}) ->
     let n1 = length prefix in
     let n2 = length postfix in

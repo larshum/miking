@@ -1,6 +1,7 @@
 include "ocaml/ast.mc"
 include "mexpr/ast-builder.mc"
 include "ocaml/symbolize.mc"
+include "ocaml/simplify.mc"
 include "mexpr/pprint.mc"
 include "mexpr/record.mc"
 include "char.mc"
@@ -100,6 +101,8 @@ lang OCamlPrettyPrint =
   CharPatPrettyPrint + BoolPatPrettyPrint + OCamlTypePrettyPrint +
   AppPrettyPrint + MExprAst-- TODO(vipa, 2021-05-12): should MExprAst be here? It wasn't before, but some of the copied constants aren't in the others
 
+  + OCamlReplaceRecords
+
   sem pprintOcamlTops =
   | tops ->
     let env = collectTopNames tops in
@@ -146,6 +149,7 @@ lang OCamlPrettyPrint =
   | TmDecl {decl = DeclRecLets _} -> false
   | TmRecord _ -> true
   | TmRecordUpdate _ -> true
+  | TmTuple _ -> true
   | OTmArray _ -> true
   | OTmMatch _ -> false
   | OTmTuple _ -> true
@@ -532,6 +536,11 @@ lang OCamlPrettyPrint =
     match pprintUpdates env updates with (env, updates) in
     (env, join ["{ ", rec, pprintNewline i,
                 "with", pprintNewline i, updates, " }"])
+  | TmTuple t ->
+    if null t.elems then (env, "()")
+    else
+      match mapAccumL (pprintCode 0) env t.elems with (env, elems) in
+      (env, join ["(", strJoin ", " elems, ")"])
   | TmDecl {decl = DeclRecLets {bindings = []}, inexpr = inexpr} -> pprintCode indent env inexpr
   | TmDecl {decl = DeclRecLets {bindings = bindings}, inexpr = inexpr} ->
     let f = lam env. lam bind.
@@ -664,6 +673,7 @@ lang OCamlPrettyPrint =
       let strs = mapi (lam i. lam p. join [get labels i, " = ", p]) pats in
       (env, join ["{", strJoin ";" strs, "}"])
     else never
+  | PatTuple {pats = pats}
   | OPatTuple {pats = pats} ->
     match mapAccumL (getPatStringCode indent) env pats with (env, pats) then
       (env, join ["(", strJoin ", " pats, ")"])
