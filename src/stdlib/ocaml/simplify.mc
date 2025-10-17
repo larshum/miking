@@ -57,7 +57,8 @@ lang OCamlReplaceRecords = MExprAst
   sem replaceRecords =
   | TmRecord t ->
     let ty = replaceRecordsType t.ty in
-    TmTuple {elems = mapValues t.bindings, ty = ty, info = t.info}
+    let elems = map replaceRecords (mapValues t.bindings) in
+    TmTuple {elems = elems, ty = ty, info = t.info}
   | t & (TmRecordUpdate _) ->
     recursive let collectInnerUpdates = lam kvs. lam t.
       match t with TmRecordUpdate tt then
@@ -117,7 +118,7 @@ lang OCamlReplaceRecords = MExprAst
     let elems = map replaceRecords tms in
     let ty = replaceRecordsType (tyTm t) in
     TmMatch {
-      target = rec,
+      target = replaceRecords rec,
       pat = PatTuple {pats = pats, ty = ty, info = i},
       thn = TmTuple {elems = elems, ty = ty, info = i},
       els = TmNever {ty = TyUnknown {info = i}, info = i},
@@ -173,7 +174,21 @@ lang OCamlSimplify = OCamlAst + MExprSideEffect + OCamlReplaceRecords
     match foldr (lam t. lam acc. deadcodeTop acc t) (env, []) tops with (_, tops) in
     let tops = inlineSingleUseBindings tops in
     let tops = removeRedundantObjMagics tops in
-    simplifyThunksInObjMagic tops
+    let tops = simplifyThunksInObjMagic tops in
+    removeRecordTypeDeclarations tops
+
+  sem removeRecordTypeDeclarations : [Top] -> [Top]
+  sem removeRecordTypeDeclarations =
+  | tops -> filter (lam t. not (isRecordTypeDeclaration t)) tops
+
+  sem isRecordTypeDeclaration : Top -> Bool
+  sem isRecordTypeDeclaration =
+  | OTopVariantTypeDecl t ->
+    if eqi (mapSize t.constrs) 1 then
+      match head (mapValues t.constrs) with TyRecord _ then true
+      else false
+    else false
+  | _ -> false
 
   sem simplifyTop : Map Name Int -> Top -> (Map Name Int, Top)
   sem simplifyTop env =
