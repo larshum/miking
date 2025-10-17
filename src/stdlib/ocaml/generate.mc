@@ -229,7 +229,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlReplaceR
       (_if cond thn (generate env t.els))
   | TmMatch (t & {pat = PatTuple _}) ->
     OTmMatch {
-      target = generate env t.target,
+      target = objMagic (generate env t.target),
       arms = [(t.pat, generate env t.thn)]
     }
   | TmMatch (t & {pat = PatSeqEdge {prefix = prefix, middle = middle, postfix = postfix}}) ->
