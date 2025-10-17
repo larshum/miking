@@ -539,7 +539,8 @@ lang OCamlPrettyPrint =
   | TmTuple t ->
     if null t.elems then (env, "()")
     else
-      match mapAccumL (pprintCode 0) env t.elems with (env, elems) in
+      match mapAccumL (pprintCode indent) env t.elems with (env, elems) in
+      let elems = map (lam s. join ["(", s, ")"]) elems in
       (env, join ["(", strJoin ", " elems, ")"])
   | TmDecl {decl = DeclRecLets {bindings = []}, inexpr = inexpr} -> pprintCode indent env inexpr
   | TmDecl {decl = DeclRecLets {bindings = bindings}, inexpr = inexpr} ->
