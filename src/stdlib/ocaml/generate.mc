@@ -227,10 +227,13 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlReplaceR
     bind_
       (nulet_ targetId (objMagic (generate env t.target)))
       (_if cond thn (generate env t.els))
-  | TmMatch (t & {pat = PatTuple _}) ->
-    OTmMatch {
-      target = objMagic (generate env t.target),
-      arms = [(t.pat, generate env t.thn)]
+  | TmMatch (t & {pat = PatTuple {pats = pats}}) ->
+    if null pats then
+      generate env t.thn
+    else
+      OTmMatch {
+        target = objMagic (generate env t.target),
+        arms = [(t.pat, generate env t.thn)]
     }
   | TmMatch (t & {pat = PatSeqEdge {prefix = prefix, middle = middle, postfix = postfix}}) ->
     let n1 = length prefix in
